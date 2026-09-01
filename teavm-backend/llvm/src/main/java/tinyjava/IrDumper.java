@@ -135,6 +135,9 @@ public class IrDumper {
         private final java.util.LinkedHashMap<String, org.teavm.model.MethodReader> postOptMethods =
                 new java.util.LinkedHashMap<>();
 
+        // Saved reference to the ListableClassHolderSource from the last emit() call.
+        private ListableClassHolderSource lastClasses;
+
         // Additional methods to force-link (class, descriptor string)
         private final List<String[]> forceLinkMethods = new ArrayList<>();
 
@@ -217,6 +220,7 @@ public class IrDumper {
         @Override
         public void emit(ListableClassHolderSource classes, BuildTarget buildTarget, String outputName)
                 throws IOException {
+            lastClasses = classes;
             // ---- Phase A: pre-inlining IR (all reachable methods) ----
             if (!preInliningPrograms.isEmpty()) {
                 System.out.println("=== Pre-inlining IR (all reachable methods) ===");
@@ -259,64 +263,8 @@ public class IrDumper {
         private void emitLlvm() throws IOException {
             System.out.println();
             System.out.println("=== Emitting LLVM IR → " + llvmOutputPath + " ===");
-
-            // Collect declared-but-not-defined functions (for external declarations).
-            java.util.Set<String> defined = new java.util.LinkedHashSet<>();
-            java.util.Set<String> called = new java.util.LinkedHashSet<>();
-
-            // We emit from postOptPrograms which holds fully optimized programs.
-            StringBuilder llvm = new StringBuilder();
-            llvm.append("; TinyJava Phase 1 LLVM IR\n");
-            llvm.append("; Generated from TeaVM 0.12.0 optimized IR\n\n");
-
-            for (var entry : postOptPrograms.entrySet()) {
-                String key = entry.getKey();
-                Program prog = entry.getValue();
-                org.teavm.model.MethodReader method = postOptMethods.get(key);
-                if (method == null || prog == null) continue;
-
-                // Skip java.lang.Object methods — they have no implementation here.
-                if (method.getReference().getClassName().equals("java.lang.Object")) {
-                    continue;
-                }
-
-                String mangledName = LlvmMethodEmitter.mangle(method);
-                defined.add(mangledName);
-
-                StringBuilder methodLlvm = new StringBuilder();
-                try {
-                    new LlvmMethodEmitter(methodLlvm, prog, method).emit();
-                } catch (Exception e) {
-                    System.err.println("  [warn] LLVM emit failed for " + key + ": " + e.getMessage());
-                    methodLlvm = new StringBuilder("; FAILED: " + key + " — " + e.getMessage() + "\n\n");
-                }
-                llvm.append(methodLlvm);
-
-                // Track calls made from this method.
-                for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
-                    BasicBlock bb = prog.basicBlockAt(bi);
-                    if (bb == null) continue;
-                    for (Instruction insn : bb) {
-                        if (insn instanceof org.teavm.model.instructions.InvokeInstruction inv) {
-                            called.add(LlvmMethodEmitter.mangle(inv.getMethod()));
-                        }
-                    }
-                }
-            }
-
-            // Emit external declarations for called but not defined functions.
-            StringBuilder decls = new StringBuilder();
-            for (String callee : called) {
-                if (!defined.contains(callee)) {
-                    // We don't know the signature here; use a generic declaration.
-                    decls.append("declare void @").append(callee).append("(...)\n");
-                }
-            }
-            if (decls.length() > 0) {
-                llvm.insert(llvm.indexOf("\n\n") + 2,
-                        "; External declarations\n" + decls + "\n");
-            }
-
+            var moduleEmitter = new LlvmModuleEmitter(lastClasses, postOptPrograms, postOptMethods);
+            String llvm = moduleEmitter.emit();
             java.nio.file.Files.writeString(java.nio.file.Path.of(llvmOutputPath), llvm);
             System.out.println("  Wrote " + llvm.length() + " chars to " + llvmOutputPath);
         }
