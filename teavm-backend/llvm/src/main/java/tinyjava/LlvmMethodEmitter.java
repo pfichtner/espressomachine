@@ -312,6 +312,12 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     @Override
     public void visit(InvokeInstruction insn) {
+        // Check for embedded intrinsics (GPIO, Delay) before regular call emission.
+        if (AvrIntrinsics.isIntrinsic(insn)) {
+            tmpCounter = AvrIntrinsics.emit(out, insn, varLiteral, tmpCounter, this::resolveVar);
+            return;
+        }
+
         StringBuilder call = new StringBuilder("  ");
         if (insn.getReceiver() != null) {
             call.append(v(insn.getReceiver())).append(" = ");
