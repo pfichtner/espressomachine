@@ -3,8 +3,10 @@ package tinyjava;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.teavm.model.BasicBlock;
 import org.teavm.model.ClassHolder;
 import org.teavm.model.FieldHolder;
@@ -54,12 +56,22 @@ class LlvmModuleEmitter {
     // ------------------------------------------------------------------
 
     private void buildFieldMaps() {
+        // Detect enum classes first so field indexing is correct.
+        for (String name : classes.getClassNames()) {
+            ClassHolder cls = classes.get(name);
+            if (cls != null && "java.lang.Enum".equals(cls.getParent())) {
+                enumClasses.add(name);
+            }
+        }
+
         for (String name : classes.getClassNames()) {
             ClassHolder cls = classes.get(name);
             if (cls == null) continue;
             Map<String, Integer> indices = new LinkedHashMap<>();
             List<ValueType> types = new ArrayList<>();
-            int i = 0;
+            // Enum subclasses reserve slots 0 (name: ptr) and 1 (ordinal: i32)
+            // for the inherited java.lang.Enum fields so GEP indices stay correct.
+            int i = enumClasses.contains(name) ? 2 : 0;
             for (FieldHolder field : cls.getFields()) {
                 if (field.hasModifier(org.teavm.model.ElementModifier.STATIC)) continue;
                 indices.put(field.getName(), i++);
@@ -101,6 +113,8 @@ class LlvmModuleEmitter {
             if (method == null || prog == null) continue;
             String mClass = method.getReference().getClassName();
             if (isJavaLangObject(mClass) || isIntrinsicClass(mClass)) continue;
+            // $values() synthesized by javac requires array allocation — skip.
+            if (enumClasses.contains(mClass) && "$values".equals(method.getName())) continue;
 
             StringBuilder methodOut = new StringBuilder();
             try {
@@ -128,19 +142,36 @@ class LlvmModuleEmitter {
     // ------------------------------------------------------------------
 
     private void emitStructTypes(StringBuilder out) {
-        boolean any = false;
+        // Emit java.lang.Enum base struct if any enum classes exist.
+        if (!enumClasses.isEmpty()) {
+            // Field 0: name (String ptr, kept null on embedded — maintains GEP indices)
+            // Field 1: ordinal (i32)
+            out.append("%java_lang_Enum_t = type { ptr, i32 }\n");
+        }
+
+        boolean any = !enumClasses.isEmpty();
         for (String name : sortedClassNames()) {
             ClassHolder cls = classes.get(name);
             if (cls == null || isJavaLangObject(name) || isIntrinsicClass(name)) continue;
-            List<ValueType> fts = fieldTypes.get(name);
-            if (fts == null || fts.isEmpty()) continue;
 
-            out.append("%").append(llvmStructName(name)).append(" = type { ");
             List<String> llvmFields = new ArrayList<>();
-            for (ValueType ft : fts) {
-                llvmFields.add(LlvmMethodEmitter.llvmType(ft));
+            if (enumClasses.contains(name)) {
+                // Enum subclass: start with inherited Enum fields, then own fields.
+                llvmFields.add("ptr");  // name (null on embedded)
+                llvmFields.add("i32");  // ordinal
+                for (FieldHolder f : cls.getFields()) {
+                    if (!f.hasModifier(org.teavm.model.ElementModifier.STATIC)) {
+                        llvmFields.add(LlvmMethodEmitter.llvmType(f.getType()));
+                    }
+                }
+            } else {
+                List<ValueType> fts = fieldTypes.get(name);
+                if (fts == null || fts.isEmpty()) continue;
+                for (ValueType ft : fts) llvmFields.add(LlvmMethodEmitter.llvmType(ft));
             }
-            out.append(String.join(", ", llvmFields)).append(" }\n");
+
+            out.append("%").append(llvmStructName(name)).append(" = type { ")
+               .append(String.join(", ", llvmFields)).append(" }\n");
             any = true;
         }
         if (any) out.append("\n");
@@ -152,7 +183,10 @@ class LlvmModuleEmitter {
 
     // Static fields whose type is a user object (set after scanning <clinit> methods).
     // Maps "ClassName.fieldName" → Java class name of the object type.
-    final java.util.Set<String> staticObjectFields = new java.util.LinkedHashSet<>();
+    final Set<String> staticObjectFields = new LinkedHashSet<>();
+
+    // Classes that extend java.lang.Enum — treated as embedded enums (ordinal-only).
+    final Set<String> enumClasses = new LinkedHashSet<>();
 
     private void emitStaticFields(StringBuilder out) {
         // Pre-scan all <clinit> methods to detect static object allocations.
@@ -164,6 +198,13 @@ class LlvmModuleEmitter {
             if (cls == null || isJavaLangObject(name) || isIntrinsicClass(name)) continue;
             for (FieldHolder field : cls.getFields()) {
                 if (!field.hasModifier(org.teavm.model.ElementModifier.STATIC)) continue;
+                // $VALUES array requires heap — leave as null global and skip in <clinit>.
+                if (enumClasses.contains(name) && "$VALUES".equals(field.getName())) {
+                    String globalName = "@" + LlvmMethodEmitter.mangle(name, field.getName());
+                    out.append(globalName).append(" = global ptr null\n");
+                    any = true;
+                    continue;
+                }
                 String key = name + "." + field.getName();
                 String globalName = "@" + LlvmMethodEmitter.mangle(name, field.getName());
                 String llvmType = LlvmMethodEmitter.llvmType(field.getType());
@@ -218,8 +259,12 @@ class LlvmModuleEmitter {
     }
 
     static boolean isJavaLangObject(String className) {
-        return className.startsWith("java.") || className.startsWith("javax.")
-            || className.startsWith("sun.") || className.startsWith("com.sun.");
+        return className.startsWith("java.")
+            || className.startsWith("javax.")
+            || className.startsWith("jdk.")
+            || className.startsWith("sun.")
+            || className.startsWith("com.sun.")
+            || className.startsWith("org.teavm.");
     }
 
     // Intrinsic API classes have no LLVM definitions — they are handled by AvrIntrinsics.
@@ -255,8 +300,9 @@ class LlvmModuleEmitter {
                 if (bb == null) continue;
                 for (Instruction insn : bb) {
                     if (insn instanceof InvokeInstruction inv) {
-                        // Skip intrinsic classes — they are handled by AvrIntrinsics, not regular calls.
-                        if (isIntrinsicClass(inv.getMethod().getClassName())) continue;
+                        String invClass = inv.getMethod().getClassName();
+                        // Skip intrinsics and JDK classes — handled elsewhere or unsupported.
+                        if (isIntrinsicClass(invClass) || isJavaLangObject(invClass)) continue;
                         called.add(LlvmMethodEmitter.mangle(inv.getMethod()));
                     }
                 }
