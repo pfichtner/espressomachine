@@ -53,29 +53,32 @@ import org.teavm.vm.TeaVMTargetController;
 import org.teavm.vm.spi.TeaVMHostExtension;
 
 /**
- * Phase 0 feasibility prototype: invokes TeaVM programmatically and dumps
- * the optimized IR (Program/BasicBlock/Instruction) to stdout.
+ * Phase 0/1 tool: invokes TeaVM programmatically, dumps the optimized IR
+ * (Program/BasicBlock/Instruction) to stdout, and optionally emits LLVM IR.
  *
- * Usage: java -jar teavm-ir-dumper.jar <classfile-dir> <ClassName>
- *   e.g. java -jar teavm-ir-dumper.jar /tmp/classes Add
+ * Usage:
+ *   java -jar teavm-ir-dumper.jar <classfile-dir> <ClassName>             # dump IR
+ *   java -jar teavm-ir-dumper.jar <classfile-dir> <ClassName> output.ll   # + emit LLVM
  */
 public class IrDumper {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
-            System.err.println("Usage: IrDumper <classpath-dir> <EntryClass>");
+            System.err.println("Usage: IrDumper <classpath-dir> <EntryClass> [output.ll]");
             System.exit(1);
         }
 
         File classpathDir = new File(args[0]);
         String entryClass = args[1];
+        String llvmOutputPath = args.length >= 3 ? args[2] : null;
 
-        System.out.println("=== TinyJava Phase 0: TeaVM IR Dump ===");
+        System.out.println("=== TinyJava Phase 0/1: TeaVM IR Dump ===");
         System.out.println("Classpath: " + classpathDir.getAbsolutePath());
         System.out.println("Entry class: " + entryClass);
+        if (llvmOutputPath != null) System.out.println("LLVM output: " + llvmOutputPath);
         System.out.println();
 
-        IrCapturingTarget target = new IrCapturingTarget(entryClass);
+        IrCapturingTarget target = new IrCapturingTarget(entryClass, llvmOutputPath);
 
         ClassLoader urlCL = new URLClassLoader(
                 new URL[]{classpathDir.toURI().toURL()},
@@ -116,6 +119,9 @@ public class IrDumper {
         // Class whose ALL methods should be force-linked (typically the entry class)
         private final String rootClassName;
 
+        // If non-null, write LLVM IR to this file path.
+        private final String llvmOutputPath;
+
         // Collect programs seen in beforeInlining — includes methods that may be
         // inlined away before emit() receives the final class set.
         private final java.util.LinkedHashMap<String, Program> preInliningPrograms =
@@ -125,11 +131,16 @@ public class IrDumper {
         private final java.util.LinkedHashMap<String, Program> postOptPrograms =
                 new java.util.LinkedHashMap<>();
 
+        // Map method reference string → MethodReader for afterOptimizations-captured methods.
+        private final java.util.LinkedHashMap<String, org.teavm.model.MethodReader> postOptMethods =
+                new java.util.LinkedHashMap<>();
+
         // Additional methods to force-link (class, descriptor string)
         private final List<String[]> forceLinkMethods = new ArrayList<>();
 
-        IrCapturingTarget(String rootClassName) {
+        IrCapturingTarget(String rootClassName, String llvmOutputPath) {
             this.rootClassName = rootClassName;
+            this.llvmOutputPath = llvmOutputPath;
         }
 
         void forceLink(String className, String methodName, String descriptor) {
@@ -198,8 +209,9 @@ public class IrDumper {
 
         @Override
         public void afterOptimizations(Program program, MethodReader method) {
-            postOptPrograms.put(method.getReference().toString(),
-                    org.teavm.model.util.ProgramUtils.copy(program));
+            String key = method.getReference().toString();
+            postOptPrograms.put(key, org.teavm.model.util.ProgramUtils.copy(program));
+            postOptMethods.put(key, method);
         }
 
         @Override
@@ -237,6 +249,76 @@ public class IrDumper {
                 if (cls == null) continue;
                 dumpClass(cls);
             }
+
+            // ---- Phase D: emit LLVM IR if requested ----
+            if (llvmOutputPath != null) {
+                emitLlvm();
+            }
+        }
+
+        private void emitLlvm() throws IOException {
+            System.out.println();
+            System.out.println("=== Emitting LLVM IR → " + llvmOutputPath + " ===");
+
+            // Collect declared-but-not-defined functions (for external declarations).
+            java.util.Set<String> defined = new java.util.LinkedHashSet<>();
+            java.util.Set<String> called = new java.util.LinkedHashSet<>();
+
+            // We emit from postOptPrograms which holds fully optimized programs.
+            StringBuilder llvm = new StringBuilder();
+            llvm.append("; TinyJava Phase 1 LLVM IR\n");
+            llvm.append("; Generated from TeaVM 0.12.0 optimized IR\n\n");
+
+            for (var entry : postOptPrograms.entrySet()) {
+                String key = entry.getKey();
+                Program prog = entry.getValue();
+                org.teavm.model.MethodReader method = postOptMethods.get(key);
+                if (method == null || prog == null) continue;
+
+                // Skip java.lang.Object methods — they have no implementation here.
+                if (method.getReference().getClassName().equals("java.lang.Object")) {
+                    continue;
+                }
+
+                String mangledName = LlvmMethodEmitter.mangle(method);
+                defined.add(mangledName);
+
+                StringBuilder methodLlvm = new StringBuilder();
+                try {
+                    new LlvmMethodEmitter(methodLlvm, prog, method).emit();
+                } catch (Exception e) {
+                    System.err.println("  [warn] LLVM emit failed for " + key + ": " + e.getMessage());
+                    methodLlvm = new StringBuilder("; FAILED: " + key + " — " + e.getMessage() + "\n\n");
+                }
+                llvm.append(methodLlvm);
+
+                // Track calls made from this method.
+                for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                    BasicBlock bb = prog.basicBlockAt(bi);
+                    if (bb == null) continue;
+                    for (Instruction insn : bb) {
+                        if (insn instanceof org.teavm.model.instructions.InvokeInstruction inv) {
+                            called.add(LlvmMethodEmitter.mangle(inv.getMethod()));
+                        }
+                    }
+                }
+            }
+
+            // Emit external declarations for called but not defined functions.
+            StringBuilder decls = new StringBuilder();
+            for (String callee : called) {
+                if (!defined.contains(callee)) {
+                    // We don't know the signature here; use a generic declaration.
+                    decls.append("declare void @").append(callee).append("(...)\n");
+                }
+            }
+            if (decls.length() > 0) {
+                llvm.insert(llvm.indexOf("\n\n") + 2,
+                        "; External declarations\n" + decls + "\n");
+            }
+
+            java.nio.file.Files.writeString(java.nio.file.Path.of(llvmOutputPath), llvm);
+            System.out.println("  Wrote " + llvm.length() + " chars to " + llvmOutputPath);
         }
 
         @Override
