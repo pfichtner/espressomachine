@@ -33,6 +33,7 @@ import org.teavm.model.instructions.NullCheckInstruction;
 import org.teavm.model.instructions.ConstructInstruction;
 import org.teavm.model.instructions.GetFieldInstruction;
 import org.teavm.model.instructions.NullConstantInstruction;
+import org.teavm.model.instructions.StringConstantInstruction;
 import org.teavm.model.instructions.PutFieldInstruction;
 
 /**
@@ -72,12 +73,21 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     // Escape analysis result — set once per method in emit().
     private EscapeAnalyzer escape;
 
+    // True when emitting an enum class's <clinit> — controls string/init/values handling.
+    private final boolean inEnumClinit;
+    // The enum class name, when inEnumClinit is true.
+    private final String enumClassName;
+
     LlvmMethodEmitter(StringBuilder out, Program program, MethodReader method,
                       LlvmModuleEmitter module) {
         this.out = out;
         this.program = program;
         this.method = method;
         this.module = module;
+        String cls = method.getReference().getClassName();
+        boolean isEnumClass = module != null && module.enumClasses.contains(cls);
+        this.inEnumClinit = isEnumClass && "<clinit>".equals(method.getName());
+        this.enumClassName = isEnumClass ? cls : null;
     }
 
     // ------------------------------------------------------------------
@@ -263,8 +273,16 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
             out.append("  ret void\n");
         } else {
             String type = llvmType(method.getResultType());
-            out.append("  ret ").append(type).append(" ")
-               .append(resolveVar(insn.getValueToReturn())).append("\n");
+            String valStr = resolveVar(insn.getValueToReturn());
+            // Boolean/byte/short/char are stored as i32 internally but returned as i8/i16.
+            // Truncate when narrowing to avoid type mismatch.
+            if ("i8".equals(type) || "i16".equals(type)) {
+                String tmp = "%rettrunc" + tmpCounter++;
+                out.append("  ").append(tmp).append(" = trunc i32 ")
+                   .append(valStr).append(" to ").append(type).append("\n");
+                valStr = tmp;
+            }
+            out.append("  ret ").append(type).append(" ").append(valStr).append("\n");
         }
     }
 
@@ -276,17 +294,24 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     @Override
     public void visit(BranchingInstruction insn) {
         String tmp = "%cond" + tmpCounter++;
-        CompareInfo ci = compareVars.get(insn.getOperand().getIndex());
-        if (ci != null) {
-            // Fuse: operand was produced by COMPARE_* — map branch condition to icmp predicate.
-            String icmpOp = compareCondToIcmp(ci.op, insn.getCondition());
+        BranchingCondition cond = insn.getCondition();
+
+        if (cond == BranchingCondition.NULL || cond == BranchingCondition.NOT_NULL) {
+            // Operand is a reference (ptr) — compare against null.
+            String icmpOp = (cond == BranchingCondition.NULL) ? "eq" : "ne";
             out.append("  ").append(tmp).append(" = icmp ").append(icmpOp)
-               .append(" i32 ").append(ci.a).append(", ").append(ci.b).append("\n");
+               .append(" ptr ").append(resolveVar(insn.getOperand())).append(", null\n");
         } else {
-            // Generic: compare the integer variable against 0.
-            String icmpOp = conditionToIcmpVsZero(insn.getCondition());
-            out.append("  ").append(tmp).append(" = icmp ").append(icmpOp)
-               .append(" i32 ").append(resolveVar(insn.getOperand())).append(", 0\n");
+            CompareInfo ci = compareVars.get(insn.getOperand().getIndex());
+            if (ci != null) {
+                String icmpOp = compareCondToIcmp(ci.op, cond);
+                out.append("  ").append(tmp).append(" = icmp ").append(icmpOp)
+                   .append(" i32 ").append(ci.a).append(", ").append(ci.b).append("\n");
+            } else {
+                String icmpOp = conditionToIcmpVsZero(cond);
+                out.append("  ").append(tmp).append(" = icmp ").append(icmpOp)
+                   .append(" i32 ").append(resolveVar(insn.getOperand())).append(", 0\n");
+            }
         }
         out.append("  br i1 ").append(tmp)
            .append(", label %").append(bbLabel(insn.getConsequent().getIndex()))
@@ -300,7 +325,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
             case EQUAL, REFERENCE_EQUAL -> "eq";
             case NOT_EQUAL, REFERENCE_NOT_EQUAL -> "ne";
         };
-        String type = "i32";  // TeaVM uses int for binary branching conditions
+        // REFERENCE_EQUAL/NOT_EQUAL compare object references (ptr); others compare integers.
+        boolean isRef = insn.getCondition() == org.teavm.model.instructions.BinaryBranchingCondition.REFERENCE_EQUAL
+                     || insn.getCondition() == org.teavm.model.instructions.BinaryBranchingCondition.REFERENCE_NOT_EQUAL;
+        String type = isRef ? "ptr" : "i32";
         out.append("  ").append(tmp).append(" = icmp ").append(icmpOp).append(" ")
            .append(type).append(" ")
            .append(resolveVar(insn.getFirstOperand())).append(", ")
@@ -315,6 +343,77 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         // Check for embedded intrinsics (GPIO, Delay) before regular call emission.
         if (AvrIntrinsics.isIntrinsic(insn)) {
             tmpCounter = AvrIntrinsics.emit(out, insn, varLiteral, tmpCounter, this::resolveVar);
+            return;
+        }
+
+        String calledClass  = insn.getMethod().getClassName();
+        String calledMethod = insn.getMethod().getName();
+
+        // ---- Enum <clinit> intercepts ----
+        if (inEnumClinit) {
+            // EnumClass.<init>(this, name, ordinal) or java.lang.Enum.<init>(this, name, ordinal)
+            // → TeaVM may inline the enum constructor, exposing the Enum.<init> call directly.
+            // In both cases: store the ordinal into the enum struct, discard the name String.
+            boolean isEnumInit = "<init>".equals(calledMethod)
+                    && (enumClassName.equals(calledClass)
+                        || "java.lang.Enum".equals(calledClass));
+            if (isEnumInit) {
+                Variable ordinalVar = insn.getArguments().get(1);  // arg0=name(ptr), arg1=ordinal
+                String thisPtr   = resolveVar(insn.getInstance());
+                String ordinalVal = resolveVar(ordinalVar);
+                String gepVar = "%gep" + tmpCounter++;
+                out.append("  ").append(gepVar)
+                   .append(" = getelementptr %java_lang_Enum_t, ptr ")
+                   .append(thisPtr).append(", i32 0, i32 1\n");
+                out.append("  store i32 ").append(ordinalVal)
+                   .append(", ptr ").append(gepVar).append("\n");
+                return;
+            }
+            // $values() — array allocation not supported; produce null.
+            if ("$values".equals(calledMethod) && enumClassName.equals(calledClass)) {
+                if (insn.getReceiver() != null) {
+                    out.append("  ").append(v(insn.getReceiver()))
+                       .append(" = inttoptr i32 0 to ptr\n");
+                }
+                return;
+            }
+        }
+
+        // ---- java.lang.Enum.<init> from within an enum constructor ----
+        // Intercept: store the ordinal (arg[1]) to the enum struct; skip the String name.
+        if ("java.lang.Enum".equals(calledClass) && "<init>".equals(calledMethod)
+                && enumClassName != null && "<init>".equals(method.getName())) {
+            Variable ordinalVar = insn.getArguments().get(1);  // arg0=name, arg1=ordinal
+            String thisPtr   = resolveVar(insn.getInstance());
+            String ordinalVal = resolveVar(ordinalVar);
+            String gepVar = "%gep" + tmpCounter++;
+            out.append("  ").append(gepVar)
+               .append(" = getelementptr %java_lang_Enum_t, ptr ")
+               .append(thisPtr).append(", i32 0, i32 1\n");
+            out.append("  store i32 ").append(ordinalVal)
+               .append(", ptr ").append(gepVar).append("\n");
+            return;
+        }
+
+        // ---- Enum.name() / Enum.toString() — requires String heap ----
+        if ("java.lang.Enum".equals(calledClass)
+                && ("name".equals(calledMethod) || "toString".equals(calledMethod)
+                    || "ordinal".equals(calledMethod))) {
+            if ("ordinal".equals(calledMethod) && insn.getReceiver() != null) {
+                // ordinal() → load the ordinal field directly
+                String thisPtr = resolveVar(insn.getInstance());
+                String gepVar = "%gep" + tmpCounter++;
+                out.append("  ").append(gepVar)
+                   .append(" = getelementptr %java_lang_Enum_t, ptr ")
+                   .append(thisPtr).append(", i32 0, i32 1\n");
+                out.append("  ").append(v(insn.getReceiver()))
+                   .append(" = load i32, ptr ").append(gepVar).append("\n");
+            } else if (insn.getReceiver() != null) {
+                out.append("  ; ERROR: Enum.").append(calledMethod)
+                   .append("() not supported — no String heap on embedded targets\n");
+                out.append("  ").append(v(insn.getReceiver()))
+                   .append(" = inttoptr i32 0 to ptr\n");
+            }
             return;
         }
 
@@ -358,6 +457,13 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     @Override
     public void visit(ConstructInstruction insn) {
         int idx = insn.getReceiver().getIndex();
+        // JDK classes have no struct type defined — can't alloca them.
+        if (LlvmModuleEmitter.isJavaLangObject(insn.getType())) {
+            out.append("  ; unsupported: new ").append(insn.getType())
+               .append(" (JDK class, not available on embedded)\n");
+            out.append("  ").append(v(insn.getReceiver())).append(" = inttoptr i32 0 to ptr\n");
+            return;
+        }
         EscapeAnalyzer.Fate f = (escape != null)
                 ? escape.fateOf(idx) : EscapeAnalyzer.Fate.STACK;
         String structType = "%" + LlvmModuleEmitter.llvmStructName(insn.getType());
@@ -494,6 +600,18 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     }
 
     @Override
+    public void visit(StringConstantInstruction insn) {
+        // String heap not supported on embedded targets.
+        // In enum <clinit> the string is the enum name — replaced with null ptr (ignored).
+        // Elsewhere, emit a diagnostic comment and null.
+        if (!inEnumClinit) {
+            out.append("  ; ERROR: string constant \"").append(insn.getConstant())
+               .append("\" — String heap not supported on embedded targets\n");
+        }
+        out.append("  ").append(v(insn.getReceiver())).append(" = inttoptr i32 0 to ptr\n");
+    }
+
+    @Override
     public void visit(org.teavm.model.instructions.EmptyInstruction insn) {
         // no-op
     }
@@ -506,6 +624,50 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     @Override
     public void visit(org.teavm.model.instructions.MonitorExitInstruction insn) {
         out.append("  ; monitorexit (unsupported — no threading)\n");
+    }
+
+    @Override
+    public void visit(org.teavm.model.instructions.SwitchInstruction insn) {
+        String cond = resolveVar(insn.getCondition());
+        out.append("  switch i32 ").append(cond)
+           .append(", label %").append(bbLabel(insn.getDefaultTarget().getIndex())).append(" [\n");
+        for (var entry : insn.getEntries()) {
+            out.append("    i32 ").append(entry.getCondition())
+               .append(", label %").append(bbLabel(entry.getTarget().getIndex())).append("\n");
+        }
+        out.append("  ]\n");
+    }
+
+    @Override
+    public void visit(org.teavm.model.instructions.RaiseInstruction insn) {
+        // Exceptions not supported on embedded — terminate the block with unreachable.
+        out.append("  ; throw (exceptions not supported on embedded targets)\n");
+        out.append("  unreachable\n");
+    }
+
+    @Override
+    public void visit(org.teavm.model.instructions.ConstructArrayInstruction insn) {
+        // Array allocation is not supported on embedded (no heap).
+        // In enum <clinit> the array is for $VALUES — emit null ptr so putstatic is valid.
+        if (!inEnumClinit) {
+            out.append("  ; ERROR: array allocation not supported on embedded targets\n");
+        }
+        out.append("  ").append(v(insn.getReceiver())).append(" = inttoptr i32 0 to ptr\n");
+    }
+
+    @Override
+    public void visit(org.teavm.model.instructions.PutElementInstruction insn) {
+        if (inEnumClinit) return;  // skip $VALUES array stores
+        out.append("  ; ERROR: array element store not supported on embedded targets\n");
+    }
+
+    @Override
+    public void visit(org.teavm.model.instructions.GetElementInstruction insn) {
+        if (inEnumClinit) return;
+        out.append("  ; array element load — arrays not supported on embedded targets\n");
+        if (insn.getReceiver() != null) {
+            out.append("  ").append(v(insn.getReceiver())).append(" = add i32 0, 0\n");
+        }
     }
 
     // ------------------------------------------------------------------

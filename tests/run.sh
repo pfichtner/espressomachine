@@ -152,6 +152,11 @@ run_hex_test "oop-blink-hex" \
     "OopBlink" \
     "$APPROVED_DIR/oop-blink.hex"
 
+# Enum support: Direction (ordinal, ==, if-else), Pin (custom field)
+run_ll_test "enum" \
+    "examples/enum/classes" \
+    "EnumTest"
+
 # ------------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------------
