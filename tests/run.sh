@@ -135,6 +135,32 @@ if [[ -z "$FILTER" || "$FILTER" == "blink-hex" ]]; then
     fi
 fi
 
+# Phase 7: OOP Blink — Led class with pin field, on()/off() instance methods
+# Proves constructor, field store/load, instance calls, and the key PRD acceptance:
+# TeaVM inlines Led entirely so GPIO pin 13 remains a compile-time constant.
+run_ll_test "oop-blink" \
+    "examples/oop-blink/classes" \
+    "OopBlink"
+
+if [[ -z "$FILTER" || "$FILTER" == "oop-blink-hex" ]]; then
+    echo "[oop-blink-hex]"
+    BLINK_BUILD="examples/blink/build"
+    bash targets/atmega328p/build.sh \
+        "examples/oop-blink/classes" OopBlink \
+        > /dev/null 2>&1 || {
+        echo "  ERROR: build.sh failed (oop-blink-hex)"
+        FAIL=$((FAIL + 1))
+    }
+    actual_hex="$BLINK_BUILD/OopBlink.hex"
+    approved_hex="$APPROVED_DIR/oop-blink.hex"
+    if [[ -f "$actual_hex" ]]; then
+        check "oop-blink-hex" "$actual_hex" "$approved_hex"
+    else
+        echo "  ERROR: OopBlink.hex not produced"
+        FAIL=$((FAIL + 1))
+    fi
+fi
+
 # ------------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------------

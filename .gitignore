@@ -7,5 +7,6 @@ dependency-reduced-pom.xml
 *.o
 *.elf
 examples/blink/build/delay_*.ll
+examples/blink/build/startup_*.S
 examples/blink/build/api_classes/
 
