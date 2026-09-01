@@ -3,3 +3,9 @@ target/
 .idea/
 *.iml
 dependency-reduced-pom.xml
+# Build artifacts
+*.o
+*.elf
+examples/blink/build/delay_*.ll
+examples/blink/build/api_classes/
+
