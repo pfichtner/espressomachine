@@ -68,21 +68,24 @@ public class IrDumper {
             System.exit(1);
         }
 
-        File classpathDir = new File(args[0]);
+        // Classpath arg supports colon-separated directories (e.g. "classes:api_classes")
+        String[] cpEntries = args[0].split(":");
         String entryClass = args[1];
         String llvmOutputPath = args.length >= 3 ? args[2] : null;
 
         System.out.println("=== TinyJava Phase 0/1: TeaVM IR Dump ===");
-        System.out.println("Classpath: " + classpathDir.getAbsolutePath());
+        System.out.println("Classpath: " + args[0]);
         System.out.println("Entry class: " + entryClass);
         if (llvmOutputPath != null) System.out.println("LLVM output: " + llvmOutputPath);
         System.out.println();
 
         IrCapturingTarget target = new IrCapturingTarget(entryClass, llvmOutputPath);
 
-        ClassLoader urlCL = new URLClassLoader(
-                new URL[]{classpathDir.toURI().toURL()},
-                IrDumper.class.getClassLoader());
+        URL[] urls = new URL[cpEntries.length];
+        for (int i = 0; i < cpEntries.length; i++) {
+            urls[i] = new File(cpEntries[i]).toURI().toURL();
+        }
+        ClassLoader urlCL = new URLClassLoader(urls, IrDumper.class.getClassLoader());
 
         // TeaVMBuilder sets classSource from classLoader in its constructor, so we must
         // explicitly rebuild classSource after creating the builder with our URL classloader.
