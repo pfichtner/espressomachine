@@ -19,6 +19,7 @@ for arg in "$@"; do
 done
 
 TOOL_JAR="teavm-backend/llvm/target/teavm-ir-dumper-0.1.0-SNAPSHOT.jar"
+TJ="java -jar $TOOL_JAR"
 APPROVED_DIR="tests/approved"
 ACTUAL_DIR="tests/actual"
 API_CLASSES="$ACTUAL_DIR/api_classes"
@@ -31,10 +32,10 @@ PASS=0; FAIL=0; SKIP=0
 # Helpers
 # ------------------------------------------------------------------
 
-# Ensure the IrDumper JAR is built.
+# Ensure the TinyJava JAR is built.
 ensure_jar() {
     if [[ ! -f "$TOOL_JAR" ]]; then
-        echo "[setup] Building teavm-ir-dumper JAR..."
+        echo "[setup] Building TinyJava JAR..."
         (cd teavm-backend/llvm && mvn package -q)
     fi
 }
@@ -67,20 +68,40 @@ check() {
     fi
 }
 
-# Run an IrDumper test: generate .ll and compare.
+# Run an emit-llvm test: generate .ll via CLI and compare against golden.
 run_ll_test() {
     local name="$1" classpath="$2" entry="$3"
     [[ -n "$FILTER" && "$name" != "$FILTER" ]] && { SKIP=$((SKIP + 1)); return 0; }
     echo "[$name]"
     local actual="$ACTUAL_DIR/${name}.ll"
     local approved="$APPROVED_DIR/${name}.ll"
-    # Suppress the verbose stdout IR dump; only the .ll file is the artifact.
-    java -jar "$TOOL_JAR" "$classpath" "$entry" "$actual" > /dev/null 2>&1 || {
-        echo "  ERROR: IrDumper failed"
+    $TJ emit-llvm --cp "$classpath" "$entry" -o "$actual" > /dev/null 2>&1 || {
+        echo "  ERROR: emit-llvm failed"
         FAIL=$((FAIL + 1))
         return 1
     }
     check "$name" "$actual" "$approved"
+}
+
+# Run a full build test: generate HEX via CLI build and compare against golden.
+run_hex_test() {
+    local name="$1" classpath="$2" entry="$3" approved_hex="$4"
+    [[ -n "$FILTER" && "$name" != "$FILTER" ]] && { SKIP=$((SKIP + 1)); return 0; }
+    echo "[$name]"
+    local build_dir="$ACTUAL_DIR/${name}-build"
+    $TJ build --cp "$classpath" "$entry" --target atmega328p --output "$build_dir" \
+        > /dev/null 2>&1 || {
+        echo "  ERROR: build failed"
+        FAIL=$((FAIL + 1))
+        return 1
+    }
+    local actual_hex="$build_dir/${entry}.hex"
+    if [[ -f "$actual_hex" ]]; then
+        check "$name" "$actual_hex" "$approved_hex"
+    else
+        echo "  ERROR: ${entry}.hex not produced"
+        FAIL=$((FAIL + 1))
+    fi
 }
 
 # ------------------------------------------------------------------
@@ -116,50 +137,20 @@ run_ll_test "blink" \
     "Blink"
 
 # Phase 5: full pipeline — Java → HEX via ATmega328P target
-if [[ -z "$FILTER" || "$FILTER" == "blink-hex" ]]; then
-    echo "[blink-hex]"
-    BLINK_BUILD="examples/blink/build"
-    bash targets/atmega328p/build.sh \
-        "examples/blink/classes:$API_CLASSES" Blink \
-        > /dev/null 2>&1 || {
-        echo "  ERROR: build.sh failed"
-        FAIL=$((FAIL + 1))
-    }
-    actual_hex="$BLINK_BUILD/Blink.hex"
-    approved_hex="$APPROVED_DIR/blink.hex"
-    if [[ -f "$actual_hex" ]]; then
-        check "blink-hex" "$actual_hex" "$approved_hex"
-    else
-        echo "  ERROR: Blink.hex not produced"
-        FAIL=$((FAIL + 1))
-    fi
-fi
+run_hex_test "blink-hex" \
+    "examples/blink/classes:$API_CLASSES" \
+    "Blink" \
+    "$APPROVED_DIR/blink.hex"
 
 # Phase 7: OOP Blink — Led class with pin field, on()/off() instance methods
-# Proves constructor, field store/load, instance calls, and the key PRD acceptance:
-# TeaVM inlines Led entirely so GPIO pin 13 remains a compile-time constant.
 run_ll_test "oop-blink" \
     "examples/oop-blink/classes" \
     "OopBlink"
 
-if [[ -z "$FILTER" || "$FILTER" == "oop-blink-hex" ]]; then
-    echo "[oop-blink-hex]"
-    BLINK_BUILD="examples/blink/build"
-    bash targets/atmega328p/build.sh \
-        "examples/oop-blink/classes" OopBlink \
-        > /dev/null 2>&1 || {
-        echo "  ERROR: build.sh failed (oop-blink-hex)"
-        FAIL=$((FAIL + 1))
-    }
-    actual_hex="$BLINK_BUILD/OopBlink.hex"
-    approved_hex="$APPROVED_DIR/oop-blink.hex"
-    if [[ -f "$actual_hex" ]]; then
-        check "oop-blink-hex" "$actual_hex" "$approved_hex"
-    else
-        echo "  ERROR: OopBlink.hex not produced"
-        FAIL=$((FAIL + 1))
-    fi
-fi
+run_hex_test "oop-blink-hex" \
+    "examples/oop-blink/classes" \
+    "OopBlink" \
+    "$APPROVED_DIR/oop-blink.hex"
 
 # ------------------------------------------------------------------
 # Summary
