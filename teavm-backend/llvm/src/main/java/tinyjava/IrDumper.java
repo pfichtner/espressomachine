@@ -68,18 +68,31 @@ public class IrDumper {
             System.exit(1);
         }
 
-        // Classpath arg supports colon-separated directories (e.g. "classes:api_classes")
-        String[] cpEntries = args[0].split(":");
-        String entryClass = args[1];
+        String classpathStr = args[0];
+        String entryClass   = args[1];
         String llvmOutputPath = args.length >= 3 ? args[2] : null;
 
         System.out.println("=== TinyJava Phase 0/1: TeaVM IR Dump ===");
-        System.out.println("Classpath: " + args[0]);
+        System.out.println("Classpath: " + classpathStr);
         System.out.println("Entry class: " + entryClass);
         if (llvmOutputPath != null) System.out.println("LLVM output: " + llvmOutputPath);
         System.out.println();
 
-        IrCapturingTarget target = new IrCapturingTarget(entryClass, llvmOutputPath);
+        compile(classpathStr, entryClass, llvmOutputPath, true);
+    }
+
+    /**
+     * Core TeaVM compilation: loads classes from colon-separated {@code classpathStr},
+     * compiles {@code entryClass}, writes LLVM IR to {@code llvmOutputPath} (may be null),
+     * and optionally prints the verbose IR dump to stdout.
+     *
+     * @return the IrCapturingTarget after compilation (contains the captured programs)
+     */
+    public static IrCapturingTarget compile(String classpathStr, String entryClass,
+                                             String llvmOutputPath, boolean verbose)
+            throws Exception {
+        String[] cpEntries = classpathStr.split(":");
+        IrCapturingTarget target = new IrCapturingTarget(entryClass, llvmOutputPath, verbose);
 
         URL[] urls = new URL[cpEntries.length];
         for (int i = 0; i < cpEntries.length; i++) {
@@ -98,19 +111,18 @@ public class IrDumper {
                .setReferenceCache(refCache);
 
         var vm = builder.build();
-        // ADVANCED uses the eager pipeline: dependency analysis → inlining → optimization.
-        // SIMPLE uses a lazy pipeline that skips beforeInlining callbacks and inlining.
         vm.setOptimizationLevel(TeaVMOptimizationLevel.ADVANCED);
         vm.setEntryPoint(entryClass);
-
         vm.build(new NullBuildTarget(), "out");
 
         if (!vm.getProblemProvider().getSevereProblems().isEmpty()) {
             System.err.println("TeaVM reported severe problems:");
             vm.getProblemProvider().getSevereProblems().forEach(p ->
                     System.err.println("  " + p.getText()));
-            System.exit(2);
+            if (verbose) System.exit(2);
+            throw new RuntimeException("TeaVM compilation failed");
         }
+        return target;
     }
 
     // -----------------------------------------------------------------------
@@ -144,9 +156,17 @@ public class IrDumper {
         // Additional methods to force-link (class, descriptor string)
         private final List<String[]> forceLinkMethods = new ArrayList<>();
 
+        // When quiet=true, emit() skips the text IR dump and only writes the .ll file.
+        private final boolean quiet;
+
         IrCapturingTarget(String rootClassName, String llvmOutputPath) {
+            this(rootClassName, llvmOutputPath, true);
+        }
+
+        IrCapturingTarget(String rootClassName, String llvmOutputPath, boolean verbose) {
             this.rootClassName = rootClassName;
             this.llvmOutputPath = llvmOutputPath;
+            this.quiet = !verbose;
         }
 
         void forceLink(String className, String methodName, String descriptor) {
@@ -224,6 +244,11 @@ public class IrDumper {
         public void emit(ListableClassHolderSource classes, BuildTarget buildTarget, String outputName)
                 throws IOException {
             lastClasses = classes;
+            if (quiet) {
+                // Quiet mode: skip text dump, only write the .ll file below.
+                if (llvmOutputPath != null) emitLlvm();
+                return;
+            }
             // ---- Phase A: pre-inlining IR (all reachable methods) ----
             if (!preInliningPrograms.isEmpty()) {
                 System.out.println("=== Pre-inlining IR (all reachable methods) ===");
