@@ -1,68 +1,118 @@
 #!/bin/bash
 # TinyJava ATmega328P build script
-# Usage: ./build.sh <blink.ll>
-# Produces: build/Blink.elf  build/Blink.hex
+#
+# Usage:
+#   ./build.sh <EntryClass.java ...>   — compile from Java source
+#   ./build.sh <classpath-dir> <EntryClass>  — use pre-compiled .class files
+#
+# Outputs: build/Blink.{ll,elf,hex}
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-RUNTIME="$REPO_ROOT/runtime/avr/atmega328p"
-TARGETS="$REPO_ROOT/targets/atmega328p"
+RUNTIME_API="$REPO_ROOT/runtime/api"
+TARGET_DIR="$REPO_ROOT/runtime/avr/atmega328p"
 
-INPUT_LL="${1:-$REPO_ROOT/examples/blink/build/Blink.ll}"
-BUILD_DIR="$REPO_ROOT/examples/blink/build"
+# Load target descriptor (MCU, F_CPU, DELAY_ITERS, TRIPLE)
+# shellcheck source=/dev/null
+source "$TARGET_DIR/target.sh"
+
+# ---- Parse arguments ----
+if [[ $# -eq 0 ]]; then
+    echo "Usage: build.sh <File.java ...>  OR  build.sh <classdir> <EntryClass>"
+    exit 1
+fi
+
+if [[ "$1" == *.java ]]; then
+    # Source mode: compile Java files then run TeaVM
+    JAVA_SOURCES=("$@")
+    ENTRY_CLASS="${JAVA_SOURCES[0]}"
+    ENTRY_CLASS="$(basename "${ENTRY_CLASS%.java}")"
+    CLASSES_DIR="$REPO_ROOT/examples/blink/build/classes"
+    mkdir -p "$CLASSES_DIR"
+    BUILD_DIR="$REPO_ROOT/examples/blink/build"
+else
+    # Pre-compiled mode: classdir + entry class name
+    CLASSES_DIR="$1"
+    ENTRY_CLASS="$2"
+    BUILD_DIR="$REPO_ROOT/examples/blink/build"
+fi
+
 mkdir -p "$BUILD_DIR"
-
-AVR_TARGET="avr"
-MCU="atmega328p"
-# LLVM/Clang AVR triple and mcpu flag
-TRIPLE="${AVR_TARGET}-unknown-unknown"
-MCPU="atmega328p"
+OUTPUT_LL="$BUILD_DIR/${ENTRY_CLASS}.ll"
 
 echo "=== TinyJava ATmega328P build ==="
-echo "Input:  $INPUT_LL"
-echo "Output: $BUILD_DIR/Blink.{elf,hex}"
+echo "Target: $MCU @ $(( F_CPU / 1000000 )) MHz  (DELAY_ITERS=$DELAY_ITERS)"
+echo "Entry:  $ENTRY_CLASS"
+echo "Output: $BUILD_DIR/${ENTRY_CLASS}.{elf,hex}"
 echo
 
-# 1. Assemble startup.S with avr-as
-echo "[1/5] Assembling startup.S..."
-avr-as -mmcu=$MCU "$TARGETS/startup.S" -o "$BUILD_DIR/startup.o"
+# ---- Step 0: compile Java sources (source mode only) ----
+if [[ "$1" == *.java ]]; then
+    echo "[0/6] Compiling Java sources..."
+    javac -cp "$RUNTIME_API" "${JAVA_SOURCES[@]}" -d "$CLASSES_DIR"
+    CLASSES_DIR="$CLASSES_DIR"
+fi
 
-# 2. Compile Blink LLVM IR to AVR object
-echo "[2/5] Compiling Blink.ll → Blink.o ..."
-llc-18 -march=avr -mcpu=$MCPU -filetype=obj \
-    -o "$BUILD_DIR/Blink.o" \
-    "$INPUT_LL"
+# ---- Step 1: TeaVM → LLVM IR ----
+TOOL_JAR="$REPO_ROOT/teavm-backend/llvm/target/teavm-ir-dumper-0.1.0-SNAPSHOT.jar"
+if [[ ! -f "$TOOL_JAR" ]]; then
+    echo "Building TeaVM backend..."
+    (cd "$REPO_ROOT/teavm-backend/llvm" && mvn package -q)
+fi
 
-# 3. Compile gpio.ll runtime
-echo "[3/5] Compiling gpio.ll → gpio.o ..."
-llc-18 -march=avr -mcpu=$MCPU -filetype=obj \
+echo "[1/6] TeaVM → LLVM IR..."
+# Add runtime/api to classpath so TeaVM can resolve GPIO/Delay class definitions
+TEAVM_CP="$CLASSES_DIR:$RUNTIME_API"
+# Compile runtime/api stubs to classes if not already done
+API_CLASSES="$BUILD_DIR/api_classes"
+if [[ ! -d "$API_CLASSES" ]]; then
+    mkdir -p "$API_CLASSES"
+    javac "$RUNTIME_API"/*.java -d "$API_CLASSES"
+fi
+TEAVM_CP="$CLASSES_DIR:$API_CLASSES"
+
+java -jar "$TOOL_JAR" "$TEAVM_CP" "$ENTRY_CLASS" "$OUTPUT_LL"
+
+# ---- Step 2: assemble startup.S ----
+echo "[2/6] Assembling startup.S..."
+avr-as -mmcu=$MCU "$SCRIPT_DIR/startup.S" -o "$BUILD_DIR/startup.o"
+
+# ---- Step 3: compile user LLVM IR ----
+echo "[3/6] Compiling ${ENTRY_CLASS}.ll → ${ENTRY_CLASS}.o ..."
+llc-18 -march=avr -mcpu=$MCU -filetype=obj \
+    -o "$BUILD_DIR/${ENTRY_CLASS}.o" \
+    "$OUTPUT_LL"
+
+# ---- Step 4: compile gpio.ll runtime ----
+echo "[4/6] Compiling gpio.ll → gpio.o ..."
+llc-18 -march=avr -mcpu=$MCU -filetype=obj \
     -o "$BUILD_DIR/gpio.o" \
-    "$RUNTIME/gpio.ll"
+    "$TARGET_DIR/gpio.ll"
 
-# 4. Compile delay.ll runtime
-echo "[4/5] Compiling delay.ll → delay.o ..."
-llc-18 -march=avr -mcpu=$MCPU -filetype=obj \
+# ---- Step 5: generate and compile calibrated delay.ll ----
+echo "[5/6] Generating delay.ll (DELAY_ITERS=$DELAY_ITERS) → delay.o ..."
+CALIBRATED_DELAY="$BUILD_DIR/delay_${DELAY_ITERS}.ll"
+sed "s/__DELAY_ITERS__/$DELAY_ITERS/g" "$TARGET_DIR/delay.ll" > "$CALIBRATED_DELAY"
+llc-18 -march=avr -mcpu=$MCU -filetype=obj \
     -o "$BUILD_DIR/delay.o" \
-    "$RUNTIME/delay.ll"
+    "$CALIBRATED_DELAY"
 
-# 5. Link
-echo "[5/5] Linking → Blink.elf ..."
-avr-ld -T "$TARGETS/linker.ld" \
+# ---- Step 6: link ----
+echo "[6/6] Linking → ${ENTRY_CLASS}.elf ..."
+avr-ld -T "$SCRIPT_DIR/linker.ld" \
     "$BUILD_DIR/startup.o" \
-    "$BUILD_DIR/Blink.o" \
+    "$BUILD_DIR/${ENTRY_CLASS}.o" \
     "$BUILD_DIR/gpio.o" \
     "$BUILD_DIR/delay.o" \
-    -o "$BUILD_DIR/Blink.elf"
+    -o "$BUILD_DIR/${ENTRY_CLASS}.elf"
 
-# 6. Convert to Intel HEX
-echo "[6/5] Converting → Blink.hex ..."
 avr-objcopy -O ihex -R .eeprom \
-    "$BUILD_DIR/Blink.elf" \
-    "$BUILD_DIR/Blink.hex"
+    "$BUILD_DIR/${ENTRY_CLASS}.elf" \
+    "$BUILD_DIR/${ENTRY_CLASS}.hex"
 
 echo
 echo "=== Build complete ==="
-avr-size "$BUILD_DIR/Blink.elf"
+avr-size "$BUILD_DIR/${ENTRY_CLASS}.elf"
 echo
-echo "Flash image: $BUILD_DIR/Blink.hex"
+echo "Flash image: $BUILD_DIR/${ENTRY_CLASS}.hex"
