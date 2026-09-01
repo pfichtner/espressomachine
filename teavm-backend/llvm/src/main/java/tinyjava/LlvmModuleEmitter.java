@@ -173,7 +173,9 @@ class LlvmModuleEmitter {
                     out.append(globalName).append(" = global ").append(structType)
                        .append(" zeroinitializer\n");
                 } else {
-                    out.append(globalName).append(" = global ").append(llvmType).append(" 0\n");
+                    // ptr types must initialize to null, not 0 (integer).
+                    String zeroVal = llvmType.equals("ptr") ? "null" : "0";
+                    out.append(globalName).append(" = global ").append(llvmType).append(" ").append(zeroVal).append("\n");
                 }
                 any = true;
             }
