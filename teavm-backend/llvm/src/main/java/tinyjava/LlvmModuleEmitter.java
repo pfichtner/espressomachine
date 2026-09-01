@@ -85,6 +85,9 @@ class LlvmModuleEmitter {
         // 2. Static field globals
         emitStaticFields(out);
 
+        // 2b. AVR intrinsic runtime declarations
+        out.append(AvrIntrinsics.runtimeDeclarations()).append("\n");
+
         // 3. External declarations (java.lang.Object methods etc.)
         java.util.Set<String> defined = collectDefinedNames();
         java.util.Set<String> called = collectCalledNames();
@@ -96,7 +99,8 @@ class LlvmModuleEmitter {
             Program prog = entry.getValue();
             MethodReader method = postOptMethods.get(key);
             if (method == null || prog == null) continue;
-            if (isJavaLangObject(method.getReference().getClassName())) continue;
+            String mClass = method.getReference().getClassName();
+            if (isJavaLangObject(mClass) || isIntrinsicClass(mClass)) continue;
 
             StringBuilder methodOut = new StringBuilder();
             try {
@@ -127,7 +131,7 @@ class LlvmModuleEmitter {
         boolean any = false;
         for (String name : sortedClassNames()) {
             ClassHolder cls = classes.get(name);
-            if (cls == null || isJavaLangObject(name)) continue;
+            if (cls == null || isJavaLangObject(name) || isIntrinsicClass(name)) continue;
             List<ValueType> fts = fieldTypes.get(name);
             if (fts == null || fts.isEmpty()) continue;
 
@@ -157,7 +161,7 @@ class LlvmModuleEmitter {
         boolean any = false;
         for (String name : sortedClassNames()) {
             ClassHolder cls = classes.get(name);
-            if (cls == null || isJavaLangObject(name)) continue;
+            if (cls == null || isJavaLangObject(name) || isIntrinsicClass(name)) continue;
             for (FieldHolder field : cls.getFields()) {
                 if (!field.hasModifier(org.teavm.model.ElementModifier.STATIC)) continue;
                 String key = name + "." + field.getName();
@@ -216,6 +220,12 @@ class LlvmModuleEmitter {
             || className.startsWith("sun.") || className.startsWith("com.sun.");
     }
 
+    // Intrinsic API classes have no LLVM definitions — they are handled by AvrIntrinsics.
+    static boolean isIntrinsicClass(String className) {
+        return AvrIntrinsics.GPIO_CLASS.equals(className)
+            || AvrIntrinsics.DELAY_CLASS.equals(className);
+    }
+
     private List<String> sortedClassNames() {
         var names = new ArrayList<>(classes.getClassNames());
         java.util.Collections.sort(names);
@@ -243,6 +253,8 @@ class LlvmModuleEmitter {
                 if (bb == null) continue;
                 for (Instruction insn : bb) {
                     if (insn instanceof InvokeInstruction inv) {
+                        // Skip intrinsic classes — they are handled by AvrIntrinsics, not regular calls.
+                        if (isIntrinsicClass(inv.getMethod().getClassName())) continue;
                         called.add(LlvmMethodEmitter.mangle(inv.getMethod()));
                     }
                 }
