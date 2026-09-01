@@ -1,5 +1,5 @@
 ; TinyJava ATmega328P startup
-; Sets up the stack and jumps to Blink_main.
+; Sets up the stack and calls __ENTRY_CLASS___main (substituted by build.sh).
 ; Placed at the reset vector (0x0000).
 
 .section .vectors, "ax", @progbits
@@ -11,7 +11,7 @@ __vector_reset:
     ldi r16, lo8(0x08FF)
     out 0x3D, r16          ; SPL
     ; Jump to TinyJava main
-    call Blink_main
+    call __ENTRY_CLASS___main
     ; Halt (infinite loop as safety net)
 .Lhalt:
     rjmp .Lhalt

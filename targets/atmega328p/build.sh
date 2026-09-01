@@ -74,9 +74,11 @@ TEAVM_CP="$CLASSES_DIR:$API_CLASSES"
 
 java -jar "$TOOL_JAR" "$TEAVM_CP" "$ENTRY_CLASS" "$OUTPUT_LL"
 
-# ---- Step 2: assemble startup.S ----
-echo "[2/6] Assembling startup.S..."
-avr-as -mmcu=$MCU "$SCRIPT_DIR/startup.S" -o "$BUILD_DIR/startup.o"
+# ---- Step 2: assemble startup.S (substitute entry class name) ----
+echo "[2/6] Assembling startup.S (entry: ${ENTRY_CLASS}_main)..."
+CALIBRATED_STARTUP="$BUILD_DIR/startup_${ENTRY_CLASS}.S"
+sed "s/__ENTRY_CLASS__/${ENTRY_CLASS}/g" "$SCRIPT_DIR/startup.S" > "$CALIBRATED_STARTUP"
+avr-as -mmcu=$MCU "$CALIBRATED_STARTUP" -o "$BUILD_DIR/startup.o"
 
 # ---- Step 3: compile user LLVM IR ----
 echo "[3/6] Compiling ${ENTRY_CLASS}.ll → ${ENTRY_CLASS}.o ..."
