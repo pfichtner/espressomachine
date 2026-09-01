@@ -30,7 +30,10 @@ import org.teavm.model.instructions.JumpInstruction;
 import org.teavm.model.instructions.LongConstantInstruction;
 import org.teavm.model.instructions.NegateInstruction;
 import org.teavm.model.instructions.NullCheckInstruction;
+import org.teavm.model.instructions.ConstructInstruction;
+import org.teavm.model.instructions.GetFieldInstruction;
 import org.teavm.model.instructions.NullConstantInstruction;
+import org.teavm.model.instructions.PutFieldInstruction;
 
 /**
  * Translates a single TeaVM method Program to LLVM IR text.
@@ -56,14 +59,22 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     private final StringBuilder out;
     private final Program program;
     private final MethodReader method;
+    // May be null (Phase 0/1 compatibility).
+    private final LlvmModuleEmitter module;
 
     // Set before each instruction is visited so visitor methods can refer to it.
     private int currentBlock = -1;
 
     LlvmMethodEmitter(StringBuilder out, Program program, MethodReader method) {
+        this(out, program, method, null);
+    }
+
+    LlvmMethodEmitter(StringBuilder out, Program program, MethodReader method,
+                      LlvmModuleEmitter module) {
         this.out = out;
         this.program = program;
         this.method = method;
+        this.module = module;
     }
 
     // ------------------------------------------------------------------
@@ -332,6 +343,100 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
                 (k, v) -> { varLiteral.put(insn.getReceiver().getIndex(), v); return v; });
         out.append("  ").append(v(insn.getReceiver()))
            .append(" = add i32 0, ").append(resolveVar(insn.getValue())).append("\n");
+    }
+
+    @Override
+    public void visit(ConstructInstruction insn) {
+        // Stack-allocate the object (Phase 2). Phase 3 will add escape analysis
+        // to decide between alloca and malloc.
+        String structType = "%" + LlvmModuleEmitter.llvmStructName(insn.getType());
+        out.append("  ").append(v(insn.getReceiver()))
+           .append(" = alloca ").append(structType).append("\n");
+    }
+
+    @Override
+    public void visit(GetFieldInstruction insn) {
+        String fieldName = insn.getField().getFieldName();
+        String className = insn.getField().getClassName();
+        if (insn.getInstance() != null) {
+            // Instance field: getelementptr + load
+            int idx = fieldIndex(className, fieldName);
+            String structType = "%" + LlvmModuleEmitter.llvmStructName(className);
+            ValueType fieldType = fieldValueType(className, idx);
+            String llvmType = llvmType(fieldType);
+            String gepVar = "%gep" + tmpCounter++;
+            out.append("  ").append(gepVar)
+               .append(" = getelementptr ").append(structType)
+               .append(", ptr ").append(resolveVar(insn.getInstance()))
+               .append(", i32 0, i32 ").append(idx).append("\n");
+            out.append("  ").append(v(insn.getReceiver()))
+               .append(" = load ").append(llvmType).append(", ptr ").append(gepVar).append("\n");
+        } else {
+            // Static field: load from global
+            String globalName = "@" + mangle(className, fieldName);
+            ValueType fieldType = staticFieldType(className, fieldName);
+            String llvmType = llvmType(fieldType);
+            out.append("  ").append(v(insn.getReceiver()))
+               .append(" = load ").append(llvmType).append(", ptr ").append(globalName).append("\n");
+        }
+    }
+
+    @Override
+    public void visit(PutFieldInstruction insn) {
+        String fieldName = insn.getField().getFieldName();
+        String className = insn.getField().getClassName();
+        if (insn.getInstance() != null) {
+            // Instance field: getelementptr + store
+            int idx = fieldIndex(className, fieldName);
+            String structType = "%" + LlvmModuleEmitter.llvmStructName(className);
+            ValueType fieldType = fieldValueType(className, idx);
+            String llvmType = llvmType(fieldType);
+            String gepVar = "%gep" + tmpCounter++;
+            out.append("  ").append(gepVar)
+               .append(" = getelementptr ").append(structType)
+               .append(", ptr ").append(resolveVar(insn.getInstance()))
+               .append(", i32 0, i32 ").append(idx).append("\n");
+            out.append("  store ").append(llvmType).append(" ")
+               .append(resolveVar(insn.getValue()))
+               .append(", ptr ").append(gepVar).append("\n");
+        } else {
+            // Static field: store to global
+            String globalName = "@" + mangle(className, fieldName);
+            ValueType fieldType = staticFieldType(className, fieldName);
+            String llvmType = llvmType(fieldType);
+            out.append("  store ").append(llvmType).append(" ")
+               .append(resolveVar(insn.getValue()))
+               .append(", ptr ").append(globalName).append("\n");
+        }
+    }
+
+    private int fieldIndex(String className, String fieldName) {
+        if (module != null) {
+            var map = module.fieldIndices.get(className);
+            if (map != null && map.containsKey(fieldName)) return map.get(fieldName);
+        }
+        return 0;
+    }
+
+    private ValueType fieldValueType(String className, int index) {
+        if (module != null) {
+            var list = module.fieldTypes.get(className);
+            if (list != null && index < list.size()) return list.get(index);
+        }
+        return ValueType.INTEGER;
+    }
+
+    private ValueType staticFieldType(String className, String fieldName) {
+        // Look up field type from module's class source.
+        if (module != null) {
+            var cls = module.classes.get(className);
+            if (cls != null) {
+                for (var f : cls.getFields()) {
+                    if (f.getName().equals(fieldName)) return f.getType();
+                }
+            }
+        }
+        return ValueType.INTEGER;
     }
 
     @Override
