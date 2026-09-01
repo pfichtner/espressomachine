@@ -69,6 +69,9 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         this(out, program, method, null);
     }
 
+    // Escape analysis result — set once per method in emit().
+    private EscapeAnalyzer escape;
+
     LlvmMethodEmitter(StringBuilder out, Program program, MethodReader method,
                       LlvmModuleEmitter module) {
         this.out = out;
@@ -82,6 +85,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     // ------------------------------------------------------------------
 
     void emit() {
+        escape = EscapeAnalyzer.analyze(program, method);
         emitFunctionHeader();
         for (int i = 0; i < program.basicBlockCount(); i++) {
             BasicBlock bb = program.basicBlockAt(i);
@@ -347,11 +351,38 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     @Override
     public void visit(ConstructInstruction insn) {
-        // Stack-allocate the object (Phase 2). Phase 3 will add escape analysis
-        // to decide between alloca and malloc.
+        int idx = insn.getReceiver().getIndex();
+        EscapeAnalyzer.Fate f = (escape != null)
+                ? escape.fateOf(idx) : EscapeAnalyzer.Fate.STACK;
         String structType = "%" + LlvmModuleEmitter.llvmStructName(insn.getType());
-        out.append("  ").append(v(insn.getReceiver()))
-           .append(" = alloca ").append(structType).append("\n");
+        switch (f) {
+            case STACK -> {
+                // Non-escaping: safe to stack-allocate.
+                out.append("  ").append(v(insn.getReceiver()))
+                   .append(" = alloca ").append(structType).append("\n");
+            }
+            case STATIC -> {
+                // Stored to a static field in <clinit>: the module emitter will
+                // have generated a global struct; hand back a ptr to it.
+                var field = escape.staticFieldOf(idx);
+                String globalName = field != null
+                        ? "@" + LlvmMethodEmitter.mangle(field.getClassName(), field.getFieldName())
+                        : "@__unknown_static_obj";
+                out.append("  ").append(v(insn.getReceiver()))
+                   .append(" = getelementptr ").append(structType)
+                   .append(", ptr ").append(globalName)
+                   .append(", i32 0").append("\n");
+            }
+            case ESCAPE -> {
+                // Heap allocation would be needed — not supported for embedded targets.
+                out.append("  ; ERROR: allocation of ").append(insn.getType())
+                   .append(" escapes stack frame — heap allocation not supported on ATmega328P\n");
+                out.append("  ; This method cannot be compiled for the embedded target.\n");
+                // Emit unreachable to satisfy LLVM IR well-formedness while flagging the issue.
+                out.append("  ").append(v(insn.getReceiver()))
+                   .append(" = inttoptr i32 0 to ptr ; UNSUPPORTED_ESCAPE\n");
+            }
+        }
     }
 
     @Override
@@ -372,12 +403,19 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
             out.append("  ").append(v(insn.getReceiver()))
                .append(" = load ").append(llvmType).append(", ptr ").append(gepVar).append("\n");
         } else {
-            // Static field: load from global
+            // Static field.
             String globalName = "@" + mangle(className, fieldName);
             ValueType fieldType = staticFieldType(className, fieldName);
-            String llvmType = llvmType(fieldType);
-            out.append("  ").append(v(insn.getReceiver()))
-               .append(" = load ").append(llvmType).append(", ptr ").append(globalName).append("\n");
+            if (isStaticObjectField(className, fieldName)) {
+                // Static object field: the global IS the struct — return ptr to it.
+                out.append("  ").append(v(insn.getReceiver()))
+                   .append(" = getelementptr i8, ptr ").append(globalName)
+                   .append(", i32 0\n");
+            } else {
+                String llvmType = llvmType(fieldType);
+                out.append("  ").append(v(insn.getReceiver()))
+                   .append(" = load ").append(llvmType).append(", ptr ").append(globalName).append("\n");
+            }
         }
     }
 
@@ -400,9 +438,15 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
                .append(resolveVar(insn.getValue()))
                .append(", ptr ").append(gepVar).append("\n");
         } else {
-            // Static field: store to global
+            // Static field.
             String globalName = "@" + mangle(className, fieldName);
             ValueType fieldType = staticFieldType(className, fieldName);
+            if (isStaticObjectField(className, fieldName)) {
+                // Static object field: the global IS the struct; store is a no-op
+                // because the allocation was already initialized as a global.
+                out.append("  ; static object already initialized as global: ").append(globalName).append("\n");
+                return;
+            }
             String llvmType = llvmType(fieldType);
             out.append("  store ").append(llvmType).append(" ")
                .append(resolveVar(insn.getValue()))
@@ -427,7 +471,6 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     }
 
     private ValueType staticFieldType(String className, String fieldName) {
-        // Look up field type from module's class source.
         if (module != null) {
             var cls = module.classes.get(className);
             if (cls != null) {
@@ -437,6 +480,11 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
             }
         }
         return ValueType.INTEGER;
+    }
+
+    private boolean isStaticObjectField(String className, String fieldName) {
+        return module != null
+                && module.staticObjectFields.contains(className + "." + fieldName);
     }
 
     @Override
