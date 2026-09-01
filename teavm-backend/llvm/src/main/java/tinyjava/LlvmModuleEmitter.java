@@ -8,12 +8,14 @@ import java.util.Map;
 import org.teavm.model.BasicBlock;
 import org.teavm.model.ClassHolder;
 import org.teavm.model.FieldHolder;
+import org.teavm.model.FieldReference;
 import org.teavm.model.Instruction;
 import org.teavm.model.ListableClassHolderSource;
 import org.teavm.model.MethodHolder;
 import org.teavm.model.MethodReader;
 import org.teavm.model.Program;
 import org.teavm.model.ValueType;
+import org.teavm.model.instructions.ConstructInstruction;
 import org.teavm.model.instructions.InvokeInstruction;
 
 /**
@@ -144,20 +146,61 @@ class LlvmModuleEmitter {
     // Static field globals
     // ------------------------------------------------------------------
 
+    // Static fields whose type is a user object (set after scanning <clinit> methods).
+    // Maps "ClassName.fieldName" → Java class name of the object type.
+    final java.util.Set<String> staticObjectFields = new java.util.LinkedHashSet<>();
+
     private void emitStaticFields(StringBuilder out) {
+        // Pre-scan all <clinit> methods to detect static object allocations.
+        detectStaticObjectAllocations();
+
         boolean any = false;
         for (String name : sortedClassNames()) {
             ClassHolder cls = classes.get(name);
             if (cls == null || isJavaLangObject(name)) continue;
             for (FieldHolder field : cls.getFields()) {
                 if (!field.hasModifier(org.teavm.model.ElementModifier.STATIC)) continue;
+                String key = name + "." + field.getName();
                 String globalName = "@" + LlvmMethodEmitter.mangle(name, field.getName());
                 String llvmType = LlvmMethodEmitter.llvmType(field.getType());
-                out.append(globalName).append(" = global ").append(llvmType).append(" 0\n");
+                if (staticObjectFields.contains(key) && field.getType() instanceof ValueType.Object obj) {
+                    // Static object field: emit the struct directly as a global instead of a ptr.
+                    String structType = "%" + llvmStructName(obj.getClassName());
+                    out.append(globalName).append(" = global ").append(structType)
+                       .append(" zeroinitializer\n");
+                } else {
+                    out.append(globalName).append(" = global ").append(llvmType).append(" 0\n");
+                }
                 any = true;
             }
         }
         if (any) out.append("\n");
+    }
+
+    private void detectStaticObjectAllocations() {
+        for (var entry : postOptPrograms.entrySet()) {
+            MethodReader method = postOptMethods.get(entry.getKey());
+            if (method == null || !method.getName().equals("<clinit>")) continue;
+            Program prog = entry.getValue();
+            if (prog == null) continue;
+
+            EscapeAnalyzer ea = EscapeAnalyzer.analyze(prog, method);
+            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                BasicBlock bb = prog.basicBlockAt(bi);
+                if (bb == null) continue;
+                for (Instruction insn : bb) {
+                    if (insn instanceof ConstructInstruction ci) {
+                        EscapeAnalyzer.Fate f = ea.fateOf(ci.getReceiver().getIndex());
+                        if (f == EscapeAnalyzer.Fate.STATIC) {
+                            FieldReference fref = ea.staticFieldOf(ci.getReceiver().getIndex());
+                            if (fref != null) {
+                                staticObjectFields.add(fref.getClassName() + "." + fref.getFieldName());
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------------
