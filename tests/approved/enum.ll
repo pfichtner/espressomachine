@@ -30,9 +30,8 @@ define i32 @EnumTest_ordinalOf(ptr %v1) {
 BB0:
   br label %BB1
 BB1:
-  %gep0 = getelementptr %java_lang_Enum_t, ptr %v1, i32 0, i32 1
-  %v2 = load i32, ptr %gep0
-  ret i32 %v2
+  %v2 = add i32 0, 0
+  ret i32 0
 }
 
 define i8 @EnumTest_isNorth(ptr %v1) {
@@ -108,39 +107,20 @@ BB0:
   br label %BB1
 BB1:
   %v1 = getelementptr %Direction_t, ptr @Direction_NORTH, i32 0
-  %v2 = inttoptr i32 0 to ptr
-  %v3 = add i32 0, 0
-  %gep0 = getelementptr %java_lang_Enum_t, ptr %v1, i32 0, i32 1
-  store i32 0, ptr %gep0
   ; static object already initialized as global: @Direction_NORTH
-  %v4 = getelementptr %Direction_t, ptr @Direction_SOUTH, i32 0
-  %v5 = inttoptr i32 0 to ptr
-  %v6 = add i32 0, 1
-  %gep1 = getelementptr %java_lang_Enum_t, ptr %v4, i32 0, i32 1
-  store i32 1, ptr %gep1
+  %v2 = getelementptr %Direction_t, ptr @Direction_SOUTH, i32 0
   ; static object already initialized as global: @Direction_SOUTH
-  %v7 = getelementptr %Direction_t, ptr @Direction_EAST, i32 0
-  %v8 = inttoptr i32 0 to ptr
-  %v9 = add i32 0, 2
-  %gep2 = getelementptr %java_lang_Enum_t, ptr %v7, i32 0, i32 1
-  store i32 2, ptr %gep2
+  %v3 = getelementptr %Direction_t, ptr @Direction_EAST, i32 0
   ; static object already initialized as global: @Direction_EAST
-  %v10 = getelementptr %Direction_t, ptr @Direction_WEST, i32 0
-  %v11 = inttoptr i32 0 to ptr
-  %v12 = add i32 0, 3
-  %gep3 = getelementptr %java_lang_Enum_t, ptr %v10, i32 0, i32 1
-  store i32 3, ptr %gep3
+  %v4 = getelementptr %Direction_t, ptr @Direction_WEST, i32 0
   ; static object already initialized as global: @Direction_WEST
-  %v13 = add i32 0, 4
-  %v16 = inttoptr i32 0 to ptr
-  %v14 = add i32 0, 0
-  %v15 = getelementptr i8, ptr @Direction_NORTH, i32 0
-  %v18 = add i32 0, 1
-  %v19 = getelementptr i8, ptr @Direction_SOUTH, i32 0
-  %v20 = add i32 0, 2
-  %v21 = getelementptr i8, ptr @Direction_EAST, i32 0
-  %v22 = add i32 0, 3
-  store ptr %v16, ptr @Direction_$VALUES
+  %v5 = add i32 0, 4
+  %v7 = inttoptr i32 0 to ptr
+  %v6 = add i32 0, 0
+  %v9 = add i32 0, 1
+  %v10 = add i32 0, 2
+  %v11 = add i32 0, 3
+  store ptr %v7, ptr @Direction_$VALUES
   ret void
 }
 
@@ -148,10 +128,8 @@ define void @Pin__init_(ptr %v0, ptr %v1, i32 %v2, i32 %v3) {
 BB0:
   br label %BB1
 BB1:
-  %gep0 = getelementptr %java_lang_Enum_t, ptr %v0, i32 0, i32 1
-  store i32 %v2, ptr %gep0
-  %gep1 = getelementptr %Pin_t, ptr %v0, i32 0, i32 2
-  store i32 %v3, ptr %gep1
+  %gep0 = getelementptr %Pin_t, ptr %v0, i32 0, i32 2
+  store i32 %v3, ptr %gep0
   ret void
 }
 
