@@ -22,7 +22,7 @@ TOOL_JAR="teavm-backend/llvm/target/bytelight-teavm-ir-dumper-0.1.0-SNAPSHOT.jar
 TJ="java -jar $TOOL_JAR"
 APPROVED_DIR="tests/approved"
 ACTUAL_DIR="tests/actual"
-API_CLASSES="$ACTUAL_DIR/api_classes"
+API_CLASSES="runtime/api/target/classes"
 
 mkdir -p "$APPROVED_DIR" "$ACTUAL_DIR"
 
@@ -40,11 +40,10 @@ ensure_jar() {
     fi
 }
 
-# Compile runtime/api stubs (GPIO.java, Delay.java) once per run.
-ensure_api_classes() {
+# Compile all examples (and runtime API) via Maven once per run.
+ensure_examples_compiled() {
     if [[ ! -d "$API_CLASSES" ]]; then
-        mkdir -p "$API_CLASSES"
-        javac -encoding UTF-8 runtime/api/*.java -d "$API_CLASSES"
+        mvn compile -q -f examples/pom.xml
     fi
 }
 
@@ -109,57 +108,57 @@ run_hex_test() {
 # ------------------------------------------------------------------
 
 ensure_jar
-ensure_api_classes
+ensure_examples_compiled
 
 # Phase 1: arithmetic
 run_ll_test "add" \
-    "examples/add/classes" \
+    "examples/add/target/classes" \
     "Add"
 
 # Phase 1: control flow — if/else, while loop, PHI node
 run_ll_test "controlflow" \
-    "examples/controlflow/classes" \
+    "examples/controlflow/target/classes" \
     "ControlFlow"
 
 # Phase 2: object model — struct type, getelementptr, instance methods
 run_ll_test "counter" \
-    "examples/objects/classes" \
+    "examples/objects/target/classes" \
     "Counter"
 
 # Phase 3: memory model — stack alloca, static global, escape error
 run_ll_test "memory" \
-    "examples/memory/classes" \
+    "examples/memory/target/classes" \
     "MemoryTest"
 
 # Phase 4: AVR intrinsics — GPIO MMIO inlining, Delay call
 run_ll_test "blink" \
-    "examples/blink/classes:$API_CLASSES" \
+    "examples/blink/target/classes:$API_CLASSES" \
     "Blink"
 
 # Phase 4b: Delay.time — TimeUnit fold to __bytelight_delay_ms
 run_ll_test "delay-time" \
-    "examples/delay-time/classes:$API_CLASSES" \
+    "examples/delay-time/target/classes:$API_CLASSES" \
     "DelayTime"
 
 # Phase 5: full pipeline — Java → HEX via ATmega328P target
 run_hex_test "blink-hex" \
-    "examples/blink/classes:$API_CLASSES" \
+    "examples/blink/target/classes:$API_CLASSES" \
     "Blink" \
     "$APPROVED_DIR/blink.hex"
 
 # Phase 7: OOP Blink — Led class with pin field, on()/off() instance methods
 run_ll_test "oop-blink" \
-    "examples/oop-blink/classes:$API_CLASSES" \
+    "examples/oop-blink/target/classes:$API_CLASSES" \
     "OopBlink"
 
 run_hex_test "oop-blink-hex" \
-    "examples/oop-blink/classes:$API_CLASSES" \
+    "examples/oop-blink/target/classes:$API_CLASSES" \
     "OopBlink" \
     "$APPROVED_DIR/oop-blink.hex"
 
 # Enum support: Direction (ordinal, ==, if-else), Pin (custom field)
 run_ll_test "enum" \
-    "examples/enum/classes" \
+    "examples/enum/target/classes" \
     "EnumTest"
 
 # ------------------------------------------------------------------

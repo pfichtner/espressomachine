@@ -129,19 +129,28 @@ Default output directory: `build/` relative to the working directory.
 
 ## GPIO and Delay API
 
-Place `runtime/api/` on the `javac` classpath when compiling user code:
+The API lives in package `bytelight.api`. Compile the stubs once, then reference them when compiling user code:
 
 ```bash
-javac -cp runtime/api MyProgram.java -d classes/
+javac runtime/api/*.java -d api-classes/
+javac -cp api-classes MyProgram.java -d classes/
+```
+
+Or compile everything in one pass:
+
+```bash
+javac runtime/api/*.java MyProgram.java -d classes/
 ```
 
 ```java
-// runtime/api/GPIO.java — target-agnostic Java stub
+import bytelight.api.*;
+
+// GPIO.java — target-agnostic stub, lowered to AVR MMIO by the backend
 GPIO.pinMode(13, GPIO.OUTPUT);
 GPIO.digitalWrite(13, GPIO.HIGH);
 GPIO.digitalWrite(13, GPIO.LOW);
 
-// runtime/api/Delay.java
+// Delay.java
 Delay.ms(500);
 ```
 
