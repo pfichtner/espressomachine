@@ -5,7 +5,8 @@
 #
 # Requires:
 #   - Docker
-#   - Node.js (for the WebSocket monitor, tests/ws-monitor.mjs)
+#   - websocat  (apt install websocat)
+#   - jq        (pre-installed on most CI environments)
 #   - The ByteLight fat JAR built (teavm-backend/llvm/target/*.jar)
 #   - An AVR toolchain to build the .hex (unless one is supplied)
 #
@@ -27,6 +28,7 @@ TOGGLE_MIN="${BLINK_TOGGLES:-4}"             # how many HIGH->LOW toggles to acc
 BUILD_TIMEOUT="${BUILD_TIMEOUT:-180}"        # seconds to wait for container readiness
 
 WS_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
+WS_URL="ws://localhost:$WS_PORT"
 CONTAINER="bytelight-blink-$$"
 
 # ---------------------------------------------------------------------------
@@ -100,9 +102,9 @@ docker start "$CONTAINER" > /dev/null 2>&1 || die "failed to start virtualavr co
 # ---------------------------------------------------------------------------
 # Wait for the WebSocket endpoint to become reachable
 # ---------------------------------------------------------------------------
-echo "[3/5] Waiting for WebSocket endpoint at ws://localhost:$WS_PORT ..."
+echo "[3/5] Waiting for WebSocket endpoint at $WS_URL ..."
 DEADLINE=$(( $(date +%s) + BUILD_TIMEOUT ))
-until node -e "const {WebSocket}=require('ws'); const ws=new WebSocket('ws://localhost:$WS_PORT'); ws.on('open',()=>{ws.close();process.exit(0)}); ws.on('error',()=>process.exit(1));" > /dev/null 2>&1; do
+until timeout 2 websocat "$WS_URL" < /dev/null > /dev/null 2>&1; do
     if [[ $(date +%s) -gt $DEADLINE ]]; then
         echo "Container logs:" >&2
         docker logs "$CONTAINER" >&2 2>&1 || true
@@ -114,13 +116,26 @@ echo "    WebSocket endpoint is ready."
 
 # ---------------------------------------------------------------------------
 # Watch pin $PIN and count toggles
+#
+# Send a pinMode message to subscribe, then collect pinState events for
+# WAIT_TIMEOUT seconds.  jq extracts the .state field for our pin, awk counts
+# transitions (HIGH→LOW or LOW→HIGH).
 # ---------------------------------------------------------------------------
 echo "[4/5] Watching pin $PIN for at least $TOGGLE_MIN toggles (${WAIT_TIMEOUT}s)..."
-WS_URL="ws://localhost:$WS_PORT"
-if ! node "$SCRIPT_DIR/ws-monitor.mjs" "$WS_URL" "$PIN" "$TOGGLE_MIN" "$WAIT_TIMEOUT"; then
+toggles=$(
+    {
+        printf '{"type":"pinMode","pin":"%s","mode":"digital"}\n' "$PIN"
+        sleep "$WAIT_TIMEOUT"
+    } | websocat "$WS_URL" 2>/dev/null \
+      | jq -rc --arg p "$PIN" \
+            'try (select(.type=="pinState" and .pin==$p) | .state)' 2>/dev/null \
+      | awk 'NR>1 && $0!=prev{c++} {prev=$0} END{print c+0}'
+) || true
+
+if [[ "${toggles:-0}" -lt "$TOGGLE_MIN" ]]; then
     echo "Container logs:" >&2
     docker logs "$CONTAINER" >&2 2>&1 || true
-    die "Blink verification failed (see log above)"
+    die "Blink verification failed: pin $PIN toggled ${toggles:-0} times, need $TOGGLE_MIN"
 fi
 
 echo "[5/5] Success: transpiled Java blink program blinks on virtualavr."

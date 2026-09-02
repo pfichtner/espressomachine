@@ -201,8 +201,7 @@ targets/atmega328p/           Linker script, startup assembly, build script
 examples/                     Demonstration programs
 tests/
   run.sh                      Approval-style test runner
-  systemtest-blink.sh         End-to-end blink test on virtualavr (requires Docker)
-  ws-monitor.mjs              Node.js WebSocket pin monitor used by the systemtest
+  systemtest-blink.sh         End-to-end blink test on virtualavr (requires Docker, websocat, jq)
   approved/                   Golden .ll and .hex snapshots
 ```
 
@@ -224,7 +223,7 @@ the simulator's WebSocket endpoint and asserts the pin toggles at least
 on simulated hardware.
 
 ```bash
-# Requires: Docker + Node.js (with the `ws` npm package installed)
+# Requires: Docker, websocat, jq
 bash tests/systemtest-blink.sh                # builds Blink.hex, then runs it on virtualavr
 bash tests/systemtest-blink.sh tests/approved/blink.hex   # use a pre-built .hex
 ```
