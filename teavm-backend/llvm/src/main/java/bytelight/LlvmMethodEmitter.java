@@ -230,7 +230,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         BinaryOperation op = insn.getOperation();
         String type = llvmNumericType(insn.getOperandType());
 
-        if (op == BinaryOperation.COMPARE) {
+        if (op == BinaryOperation.COMPARE_GREATER || op == BinaryOperation.COMPARE_LESS) {
             // COMPARE produces sign(a - b): 1 if a>b, 0 if a==b, -1 if a<b.
             // Record operands for fusion with the immediately following BranchingInstruction.
             String a = resolveVar(insn.getFirstOperand());
@@ -768,7 +768,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
             case SHIFT_LEFT -> "shl";
             case SHIFT_RIGHT -> "ashr";
             case SHIFT_RIGHT_UNSIGNED -> "lshr";
-            case COMPARE -> "sub";  // handled above; fallback
+            case COMPARE_GREATER, COMPARE_LESS -> "sub";  // handled above; fallback
             default -> throw new IllegalStateException("Unhandled binary op: " + op);
         };
     }

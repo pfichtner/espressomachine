@@ -70,6 +70,7 @@ import org.teavm.model.instructions.SwitchInstruction;
 import org.teavm.model.util.ProgramUtils;
 import org.teavm.model.util.VariableCategoryProvider;
 import org.teavm.parsing.ClasspathClassHolderSource;
+import org.teavm.parsing.ClasspathResourceProvider;
 import org.teavm.vm.BuildTarget;
 import org.teavm.vm.TeaVMBuilder;
 import org.teavm.vm.TeaVMOptimizationLevel;
@@ -128,7 +129,7 @@ public class IrDumper {
         // TeaVMBuilder sets classSource from classLoader in its constructor, so we must
         // explicitly rebuild classSource after creating the builder with our URL classloader.
         var refCache = new ReferenceCache();
-        var classSource = new ClasspathClassHolderSource(urlCL, refCache);
+        var classSource = new ClasspathClassHolderSource(new ClasspathResourceProvider(urlCL), refCache, urlCL);
 
         TeaVMBuilder builder = new TeaVMBuilder(target);
         builder.setClassLoader(urlCL)
