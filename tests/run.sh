@@ -161,6 +161,16 @@ run_ll_test "enum" \
     "examples/enum/target/classes" \
     "EnumTest"
 
+# Serial: USART0 init inlined, write calls via runtime, println inlined
+run_ll_test "serial" \
+    "examples/serial/target/classes:$API_CLASSES" \
+    "HelloSerial"
+
+run_hex_test "serial-hex" \
+    "examples/serial/target/classes:$API_CLASSES" \
+    "HelloSerial" \
+    "$APPROVED_DIR/serial.hex"
+
 # ------------------------------------------------------------------
 # System integration test (requires Docker + Node.js + AVR toolchain)
 # ------------------------------------------------------------------
@@ -170,6 +180,21 @@ if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-blink" ]]; the
     if [[ "$FILTER" == "systemtest-blink" || -z "$FILTER" ]]; then
         echo "[systemtest-blink]"
         if bash tests/systemtest-blink.sh; then
+            echo "  PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "  FAIL"
+            FAIL=$((FAIL + 1))
+        fi
+    fi
+fi
+
+# Run the transpiled Java serial program on virtualavr and verify 'A' (0x41)
+# is transmitted over the virtual USART via the WebSocket serialDebug interface.
+if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-serial" ]]; then
+    if [[ "$FILTER" == "systemtest-serial" || -z "$FILTER" ]]; then
+        echo "[systemtest-serial]"
+        if bash tests/systemtest-serial.sh; then
             echo "  PASS"
             PASS=$((PASS + 1))
         else

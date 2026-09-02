@@ -99,8 +99,10 @@ class LlvmModuleEmitter {
         // 2. Static field globals
         emitStaticFields(out);
 
-        // 2b. AVR intrinsic runtime declarations
-        out.append(AvrIntrinsics.runtimeDeclarations()).append("\n");
+        // 2b. AVR intrinsic runtime declarations (serial only when the program uses it)
+        out.append(AvrIntrinsics.runtimeDeclarations());
+        if (usesSerial()) out.append(AvrIntrinsics.serialDeclarations());
+        out.append("\n");
 
         // 3. External declarations (java.lang.Object methods etc.)
         Set<String> defined = collectDefinedNames();
@@ -282,13 +284,32 @@ class LlvmModuleEmitter {
     // Intrinsic API classes have no LLVM definitions — they are handled by AvrIntrinsics.
     static boolean isIntrinsicClass(String className) {
         return AvrIntrinsics.GPIO_CLASS.equals(className)
-            || AvrIntrinsics.DELAY_CLASS.equals(className);
+            || AvrIntrinsics.DELAY_CLASS.equals(className)
+            || AvrIntrinsics.SERIAL_CLASS.equals(className);
     }
 
     private List<String> sortedClassNames() {
         var names = new ArrayList<>(classes.getClassNames());
         java.util.Collections.sort(names);
         return names;
+    }
+
+    private boolean usesSerial() {
+        for (var entry : postOptPrograms.entrySet()) {
+            Program prog = entry.getValue();
+            if (prog == null) continue;
+            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                BasicBlock bb = prog.basicBlockAt(bi);
+                if (bb == null) continue;
+                for (Instruction insn : bb) {
+                    if (insn instanceof InvokeInstruction inv
+                            && AvrIntrinsics.SERIAL_CLASS.equals(inv.getMethod().getClassName())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private Set<String> collectDefinedNames() {
