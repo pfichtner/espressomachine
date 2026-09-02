@@ -33,3 +33,9 @@ jobs:
 
       - name: Run tests
         run: bash tests/run.sh
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Run virtualavr system test
+        run: bash tests/systemtest-blink.sh
