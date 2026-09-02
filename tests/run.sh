@@ -44,7 +44,7 @@ ensure_jar() {
 ensure_api_classes() {
     if [[ ! -d "$API_CLASSES" ]]; then
         mkdir -p "$API_CLASSES"
-        javac runtime/api/*.java -d "$API_CLASSES"
+        javac -encoding UTF-8 runtime/api/*.java -d "$API_CLASSES"
     fi
 }
 
@@ -153,7 +153,7 @@ run_ll_test "oop-blink" \
     "OopBlink"
 
 run_hex_test "oop-blink-hex" \
-    "examples/oop-blink/classes" \
+    "examples/oop-blink/classes:$API_CLASSES" \
     "OopBlink" \
     "$APPROVED_DIR/oop-blink.hex"
 

@@ -59,7 +59,7 @@ if [[ -z "$HEX_FILE" ]]; then
     else
         # Compile runtime/api stubs so TeaVM can resolve GPIO/Delay
         mkdir -p "$WORK_DIR/api_classes"
-        javac "$REPO_ROOT"/runtime/api/*.java -d "$WORK_DIR/api_classes"
+        javac -encoding UTF-8 "$REPO_ROOT"/runtime/api/*.java -d "$WORK_DIR/api_classes"
         if (cd "$REPO_ROOT" && ./bin/tinyjava build \
             --cp "examples/blink/classes:$WORK_DIR/api_classes" \
             Blink \

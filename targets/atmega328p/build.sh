@@ -50,7 +50,7 @@ echo
 # ---- Step 0: compile Java sources (source mode only) ----
 if [[ "$1" == *.java ]]; then
     echo "[0/6] Compiling Java sources..."
-    javac -cp "$RUNTIME_API" "${JAVA_SOURCES[@]}" -d "$CLASSES_DIR"
+    javac -encoding UTF-8 -cp "$RUNTIME_API" "${JAVA_SOURCES[@]}" -d "$CLASSES_DIR"
     CLASSES_DIR="$CLASSES_DIR"
 fi
 
@@ -68,7 +68,7 @@ TEAVM_CP="$CLASSES_DIR:$RUNTIME_API"
 API_CLASSES="$BUILD_DIR/api_classes"
 if [[ ! -d "$API_CLASSES" ]]; then
     mkdir -p "$API_CLASSES"
-    javac "$RUNTIME_API"/*.java -d "$API_CLASSES"
+    javac -encoding UTF-8 "$RUNTIME_API"/*.java -d "$API_CLASSES"
 fi
 TEAVM_CP="$CLASSES_DIR:$API_CLASSES"
 
