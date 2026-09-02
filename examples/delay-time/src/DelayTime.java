@@ -1,4 +1,6 @@
-import bytelight.api.*;
+import bytelight.api.Delay;
+import bytelight.api.GPIO;
+import java.util.concurrent.TimeUnit;
 
 class DelayTime {
     static void main() {

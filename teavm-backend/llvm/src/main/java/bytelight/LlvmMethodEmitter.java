@@ -544,6 +544,16 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
                 out.append("  ").append(v(insn.getReceiver()))
                    .append(" = getelementptr i8, ptr ").append(globalName)
                    .append(", i32 0\n");
+            } else if (LlvmModuleEmitter.isJavaLangObject(className)
+                       && fieldType instanceof ValueType.Object) {
+                // JDK class object field (e.g. java.util.concurrent.TimeUnit.SECONDS):
+                // route through the getelementptr path so intrinsics can identify the
+                // constant by global name. A stub global is emitted at module level.
+                staticObjectRef.put(insn.getReceiver().getIndex(), globalName);
+                module.jdkGlobalStubs.add(globalName);
+                out.append("  ").append(v(insn.getReceiver()))
+                   .append(" = getelementptr i8, ptr ").append(globalName)
+                   .append(", i32 0\n");
             } else {
                 String llvmType = llvmType(fieldType);
                 out.append("  ").append(v(insn.getReceiver()))

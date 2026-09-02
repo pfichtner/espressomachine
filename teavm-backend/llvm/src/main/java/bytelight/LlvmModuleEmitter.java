@@ -136,6 +136,12 @@ class LlvmModuleEmitter {
         if (!called.isEmpty()) out.append("\n");
 
         out.append(methods);
+        if (!jdkGlobalStubs.isEmpty()) {
+            out.append("\n");
+            for (String stub : jdkGlobalStubs) {
+                out.append(stub).append(" = global i8 0\n");
+            }
+        }
         return out.toString();
     }
 
@@ -189,6 +195,10 @@ class LlvmModuleEmitter {
 
     // Classes that extend java.lang.Enum — treated as embedded enums (ordinal-only).
     final Set<String> enumClasses = new LinkedHashSet<>();
+
+    // JDK class static object globals referenced by user code — need stub definitions
+    // so the LLVM module is well-formed (the pointer value is never actually used).
+    final Set<String> jdkGlobalStubs = new LinkedHashSet<>();
 
     private void emitStaticFields(StringBuilder out) {
         // Pre-scan all <clinit> methods to detect static object allocations.

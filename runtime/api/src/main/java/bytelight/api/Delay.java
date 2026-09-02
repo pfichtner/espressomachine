@@ -1,13 +1,11 @@
 package bytelight.api;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * ByteLight delay API for ATmega328P (16 MHz).
  *
  * Lowered to a software delay loop by the ByteLight intrinsic layer.
- *
- * {@code TimeUnit} refers to the embedded stub in the same package — see
- * {@code runtime/api/TimeUnit.java}. The standalone JDK
- * {@code java.util.concurrent.TimeUnit} cannot be lowered to AVR code.
  */
 public class Delay {
     /** Busy-wait for approximately `ms` milliseconds at 16 MHz. */
