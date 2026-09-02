@@ -1,23 +1,23 @@
-package tinyjava.cli;
+package bytelight.cli;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Orchestrates the TinyJava compilation pipeline from LLVM IR to a flashable HEX file.
+ * Orchestrates the ByteLight compilation pipeline from LLVM IR to a flashable HEX file.
  *
  * Step 1 (TeaVM → LLVM IR) is handled by IrDumper.compile() before this class is invoked.
  * Steps 2-6 here shell out to the AVR toolchain.
  */
 class Pipeline {
 
-    private final Path tinyjavaHome;
+    private final Path bytelightHome;
     private final String target;   // e.g. "atmega328p"
     private final Path outputDir;
 
-    Pipeline(Path tinyjavaHome, String target, Path outputDir) {
-        this.tinyjavaHome = tinyjavaHome;
+    Pipeline(Path bytelightHome, String target, Path outputDir) {
+        this.bytelightHome = bytelightHome;
         this.target = target;
         this.outputDir = outputDir;
     }
@@ -29,8 +29,8 @@ class Pipeline {
     void compileToAvr(Path inputLl, String entryClass) throws IOException, InterruptedException {
         Files.createDirectories(outputDir);
 
-        Path targetDir = tinyjavaHome.resolve("runtime/avr/" + target);
-        Path scriptsDir = tinyjavaHome.resolve("targets/" + target);
+        Path targetDir = bytelightHome.resolve("runtime/avr/" + target);
+        Path scriptsDir = bytelightHome.resolve("targets/" + target);
 
         // Load target descriptor
         String mcu = readTargetVar(targetDir, "MCU", "atmega328p");

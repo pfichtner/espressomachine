@@ -1,13 +1,13 @@
-; TinyJava AVR runtime — delay template
+; ByteLight AVR runtime — delay template
 ;
-; __tinyjava_delay_ms(i32 %ms):
+; __bytelight_delay_ms(i32 %ms):
 ;   Inner loop body = 4 AVR cycles.
 ;   Iterations per ms = F_CPU / 4 / 1000  (set by build.sh via __DELAY_ITERS__).
 ;
 ;   ATmega328P @ 16 MHz → 4000 iterations/ms
 ;   ATmega328P @  8 MHz → 2000 iterations/ms
 
-define void @__tinyjava_delay_ms(i32 %ms) {
+define void @__bytelight_delay_ms(i32 %ms) {
 entry:
   %zero = icmp eq i32 %ms, 0
   br i1 %zero, label %done, label %outer_loop

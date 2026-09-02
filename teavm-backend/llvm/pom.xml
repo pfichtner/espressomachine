@@ -4,8 +4,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>tinyjava</groupId>
-    <artifactId>teavm-ir-dumper</artifactId>
+    <groupId>io.github.pfichtner</groupId>
+    <artifactId>bytelight-teavm-ir-dumper</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
@@ -40,7 +40,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>tinyjava.cli.TinyJavaCli</mainClass>
+                            <mainClass>bytelight.cli.ByteLightCli</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -57,7 +57,7 @@
                             <shadedArtifactAttached>false</shadedArtifactAttached>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>tinyjava.cli.TinyJavaCli</mainClass>
+                                    <mainClass>bytelight.cli.ByteLightCli</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>

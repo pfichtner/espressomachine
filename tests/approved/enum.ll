@@ -1,4 +1,4 @@
-; TinyJava Phase 2 LLVM IR
+; ByteLight Phase 2 LLVM IR
 ; Generated from TeaVM 0.12.0 optimized IR
 
 %java_lang_Enum_t = type { ptr, i32 }
@@ -14,9 +14,9 @@
 @Pin_BUTTON = global %Pin_t zeroinitializer
 @Pin_$VALUES = global ptr null
 
-declare void @__tinyjava_gpio_pinmode(i32 %pin, i32 %mode)
-declare void @__tinyjava_gpio_digitalwrite(i32 %pin, i32 %value)
-declare void @__tinyjava_delay_ms(i32 %ms)
+declare void @__bytelight_gpio_pinmode(i32 %pin, i32 %mode)
+declare void @__bytelight_gpio_digitalwrite(i32 %pin, i32 %value)
+declare void @__bytelight_delay_ms(i32 %ms)
 
 
 define void @EnumTest__init_(ptr %v0) {

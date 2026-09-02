@@ -1,4 +1,4 @@
-// TinyJava enum support test.
+// ByteLight enum support test.
 //
 // Supported today:
 //   - ordinal() access (reads the i32 ordinal field)

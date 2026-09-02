@@ -1,4 +1,4 @@
-# TinyJava
+# ByteLight
 
 Compiles JVM bytecode produced by standard `javac` into native code for microcontrollers — no JVM, no interpreter, no managed runtime on the MCU.
 
@@ -19,7 +19,7 @@ class Blink {
 ```
 
 ```
-tinyjava build Blink.class --target atmega328p
+bytelight build Blink.class --target atmega328p
 ```
 
 → `build/Blink.hex` — **332 bytes** of AVR machine code, ready to flash.
@@ -38,7 +38,7 @@ Java source
     │  · devirtualization
     │  · SSA optimisation
     │
-    ▼ TinyJava backend
+    ▼ ByteLight backend
     │  · LLVM IR generation
     │  · escape analysis (stack vs. static vs. heap error)
     │  · AVR intrinsic lowering (GPIO, Delay → MMIO)
@@ -50,7 +50,7 @@ Java source
     ▼ ATmega328P .hex
 ```
 
-[TeaVM](https://teavm.org) handles the hard frontend work (class loading, points-to analysis, SSA construction, inlining). TinyJava is a pure backend/profile that targets embedded MCUs.
+[TeaVM](https://teavm.org) handles the hard frontend work (class loading, points-to analysis, SSA construction, inlining). ByteLight is a pure backend/profile that targets embedded MCUs.
 
 ## Features
 
@@ -71,7 +71,7 @@ Java source
 | 5 | ATmega328P target — startup, linker, `avr-ld`, produces flashable HEX |
 | 6 | First Blink — `Blink.hex` 332 bytes, `sbi`/`cbi` verified by disassembly |
 | 7 | OOP Blink — `Led` class with constructor, fields, instance methods; 328 bytes |
-| CLI | `tinyjava build / inspect / emit-llvm / flash` |
+| CLI | `bytelight build / inspect / emit-llvm / flash` |
 
 ## Requirements
 
@@ -81,7 +81,7 @@ Java source
 | Maven | 3.8+ |
 | LLVM | 18 (`llc-18`, `llvm-as`) |
 | AVR binutils | `avr-as`, `avr-ld`, `avr-objcopy`, `avr-size` |
-| avrdude | for `tinyjava flash` |
+| avrdude | for `bytelight flash` |
 
 Install on Ubuntu/Debian:
 
@@ -99,23 +99,23 @@ cd teavm-backend/llvm && mvn package -q && cd ../..
 export PATH="$PWD/bin:$PATH"
 
 # Compile and inspect IR
-tinyjava emit-llvm examples/blink/classes Blink -o Blink.ll
+bytelight emit-llvm examples/blink/classes Blink -o Blink.ll
 
 # Full pipeline → HEX
-tinyjava build examples/blink/classes Blink --target atmega328p
+bytelight build examples/blink/classes Blink --target atmega328p
 avr-size build/Blink.elf
 
 # Flash (replace /dev/ttyUSB0 with your port)
-tinyjava flash build/Blink.hex --port /dev/ttyUSB0
+bytelight flash build/Blink.hex --port /dev/ttyUSB0
 ```
 
 ## CLI reference
 
 ```
-tinyjava build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]
-tinyjava inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]
-tinyjava emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]
-tinyjava flash     --port <dev>                                    <Foo.hex>
+bytelight build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]
+bytelight inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]
+bytelight emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]
+bytelight flash     --port <dev>                                    <Foo.hex>
 ```
 
 Input forms:
@@ -165,15 +165,15 @@ Heap/GC is explicitly out of scope for the initial release.
    ```
 2. Provide `gpio.ll` and `delay.ll` (or symlink if registers are identical).
 3. Create `targets/<mcu>/startup.S`, `linker.ld`.
-4. Run: `tinyjava build MyClass --target <mcu>`
+4. Run: `bytelight build MyClass --target <mcu>`
 
 ## Project layout
 
 ```
-bin/tinyjava                  CLI launcher
+bin/bytelight                  CLI launcher
 teavm-backend/llvm/           Java compiler (Maven project)
-  src/main/java/tinyjava/
-    cli/TinyJavaCli.java      CLI entry point & subcommand dispatch
+  src/main/java/bytelight/
+    cli/ByteLightCli.java      CLI entry point & subcommand dispatch
     cli/Pipeline.java         AVR toolchain orchestration
     IrDumper.java             TeaVM driver (also legacy entry point)
     LlvmModuleEmitter.java    LLVM IR module writer

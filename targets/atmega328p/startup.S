@@ -1,4 +1,4 @@
-; TinyJava ATmega328P startup
+; ByteLight ATmega328P startup
 ; Sets up the stack and calls __ENTRY_CLASS___main (substituted by build.sh).
 ; Placed at the reset vector (0x0000).
 
@@ -10,7 +10,7 @@ __vector_reset:
     out 0x3E, r16          ; SPH
     ldi r16, lo8(0x08FF)
     out 0x3D, r16          ; SPL
-    ; Jump to TinyJava main
+    ; Jump to ByteLight main
     call __ENTRY_CLASS___main
     ; Halt (infinite loop as safety net)
 .Lhalt:

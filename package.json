@@ -12,15 +12,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pfichtner/tinyjava.git"
+    "url": "git+https://github.com/pfichtner/bytelight.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/pfichtner/tinyjava/issues"
+    "url": "https://github.com/pfichtner/bytelight/issues"
   },
-  "homepage": "https://github.com/pfichtner/tinyjava#readme",
+  "homepage": "https://github.com/pfichtner/bytelight#readme",
   "dependencies": {
     "ws": "^8.21.3"
   }

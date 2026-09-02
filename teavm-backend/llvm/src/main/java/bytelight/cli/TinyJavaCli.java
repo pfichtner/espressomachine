@@ -1,4 +1,4 @@
-package tinyjava.cli;
+package bytelight.cli;
 
 import java.io.File;
 import java.io.IOException;
@@ -9,23 +9,23 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-import tinyjava.IrDumper;
+import bytelight.IrDumper;
 
 /**
- * TinyJava CLI entry point.
+ * ByteLight CLI entry point.
  *
  * Subcommands:
- *   tinyjava build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]
- *   tinyjava inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]
- *   tinyjava emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]
- *   tinyjava flash     --port <dev>                                    <Foo.hex>
+ *   bytelight build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]
+ *   bytelight inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]
+ *   bytelight emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]
+ *   bytelight flash     --port <dev>                                    <Foo.hex>
  *
  * Input resolution:
  *   Foo.class          → classpath = parent dir, entry class = "Foo"
  *   dir/ Foo           → classpath = dir/, entry class = "Foo"
  *   dir1:dir2 Foo      → classpath = "dir1:dir2", entry class = "Foo"
  */
-public class TinyJavaCli {
+public class ByteLightCli {
 
     public static void main(String[] args) throws Exception {
         // Backward-compatible: if no subcommand detected, delegate to IrDumper.
@@ -59,9 +59,9 @@ public class TinyJavaCli {
         Path outputDir = Paths.get(o.outputDir != null ? o.outputDir : "build");
 
         String target = o.target != null ? o.target : "atmega328p";
-        Path tinyjavaHome = findHome();
+        Path bytelightHome = findHome();
 
-        System.out.println("=== TinyJava build ===");
+        System.out.println("=== ByteLight build ===");
         System.out.println("Entry:  " + o.entryClass);
         System.out.println("Target: " + target);
         System.out.println("Output: " + outputDir.toAbsolutePath());
@@ -74,7 +74,7 @@ public class TinyJavaCli {
         IrDumper.compile(o.classpath, o.entryClass, llFile.toString(), false);
 
         // Steps 2-6: LLVM IR → ELF → HEX
-        new Pipeline(tinyjavaHome, target, outputDir)
+        new Pipeline(bytelightHome, target, outputDir)
                 .compileToAvr(llFile, o.entryClass);
     }
 
@@ -188,7 +188,7 @@ public class TinyJavaCli {
                     entryClass = positionals.get(1);
                 }
                 if (entryClass == null) {
-                    die("Missing entry class name. Usage: tinyjava <cmd> <dir> <ClassName>");
+                    die("Missing entry class name. Usage: bytelight <cmd> <dir> <ClassName>");
                 }
             }
         }
@@ -210,14 +210,14 @@ public class TinyJavaCli {
     static Path findHome() {
         try {
             // Resolve TINYJAVA_HOME from the location of this JAR.
-            // JAR lives at: $TINYJAVA_HOME/teavm-backend/llvm/target/tinyjava.jar
+            // JAR lives at: $TINYJAVA_HOME/teavm-backend/llvm/target/bytelight.jar
             Path jarPath = Paths.get(
-                    TinyJavaCli.class.getProtectionDomain()
+                    ByteLightCli.class.getProtectionDomain()
                             .getCodeSource().getLocation().toURI());
             return jarPath.getParent()   // target/
                           .getParent()   // llvm/
                           .getParent()   // teavm-backend/
-                          .getParent();  // tinyjava/
+                          .getParent();  // bytelight/
         } catch (URISyntaxException e) {
             throw new RuntimeException("Cannot resolve TINYJAVA_HOME", e);
         }
@@ -233,10 +233,10 @@ public class TinyJavaCli {
         System.err.println("Error: " + msg);
         System.err.println();
         System.err.println("Usage:");
-        System.err.println("  tinyjava build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]");
-        System.err.println("  tinyjava inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]");
-        System.err.println("  tinyjava emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]");
-        System.err.println("  tinyjava flash     --port <dev>                                    <Foo.hex>");
+        System.err.println("  bytelight build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]");
+        System.err.println("  bytelight inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]");
+        System.err.println("  bytelight emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]");
+        System.err.println("  bytelight flash     --port <dev>                                    <Foo.hex>");
         System.exit(1);
         throw new RuntimeException("unreachable");
     }

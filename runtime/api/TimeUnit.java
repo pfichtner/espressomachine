@@ -1,11 +1,11 @@
 /**
- * TinyJava embedded time unit enum (mirrors the constants of the JDK's
+ * ByteLight embedded time unit enum (mirrors the constants of the JDK's
  * {@code java.util.concurrent.TimeUnit}).
  *
  * The standalone JDK enum cannot be lowered to AVR code: its static
  * initializer pulls in the {@code jdk.internal.*} machinery (Unsafe, arrays,
  * String) that the embedded target does not support, and its enum globals are
- * never emitted by the TinyJava backend. This default-package stub keeps the
+ * never emitted by the ByteLight backend. This default-package stub keeps the
  * same usage ({@code TimeUnit.SECONDS}, {@code TimeUnit.MILLISECONDS}, ...) and
  * lets the backend statically compute millisecond equivalents.
  */

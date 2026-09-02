@@ -1,12 +1,12 @@
 #!/bin/bash
-# TinyJava system integration test: run the transpiled Java blink program
+# ByteLight system integration test: run the transpiled Java blink program
 # on virtualavr (https://github.com/pfichtner/virtualavr) and verify the LED
 # (pin 13) actually blinks by watching pin-state messages over WebSocket.
 #
 # Requires:
 #   - Docker
 #   - Node.js (for the WebSocket monitor, tests/ws-monitor.mjs)
-#   - The TinyJava fat JAR built (teavm-backend/llvm/target/*.jar)
+#   - The ByteLight fat JAR built (teavm-backend/llvm/target/*.jar)
 #   - An AVR toolchain to build the .hex (unless one is supplied)
 #
 # Usage:
@@ -27,7 +27,7 @@ TOGGLE_MIN="${BLINK_TOGGLES:-4}"             # how many HIGH->LOW toggles to acc
 BUILD_TIMEOUT="${BUILD_TIMEOUT:-180}"        # seconds to wait for container readiness
 
 WS_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
-CONTAINER="tinyjava-blink-$$"
+CONTAINER="bytelight-blink-$$"
 
 # ---------------------------------------------------------------------------
 # Cleanup on exit
@@ -52,7 +52,7 @@ WORK_DIR=$(mktemp -d)
 
 if [[ -z "$HEX_FILE" ]]; then
     HEX_FILE="$WORK_DIR/Blink.hex"
-    echo "[1/5] Building Blink.hex via TinyJava..."
+    echo "[1/5] Building Blink.hex via ByteLight..."
     if ! command -v javac > /dev/null 2>&1 || ! command -v avr-ld > /dev/null 2>&1; then
         echo "    (AVR toolchain not installed; using approved hex tests/approved/blink.hex)"
         cp "$REPO_ROOT/tests/approved/blink.hex" "$HEX_FILE"
@@ -60,7 +60,7 @@ if [[ -z "$HEX_FILE" ]]; then
         # Compile runtime/api stubs so TeaVM can resolve GPIO/Delay
         mkdir -p "$WORK_DIR/api_classes"
         javac -encoding UTF-8 "$REPO_ROOT"/runtime/api/*.java -d "$WORK_DIR/api_classes"
-        if (cd "$REPO_ROOT" && ./bin/tinyjava build \
+        if (cd "$REPO_ROOT" && ./bin/bytelight build \
             --cp "examples/blink/classes:$WORK_DIR/api_classes" \
             Blink \
             --target atmega328p \

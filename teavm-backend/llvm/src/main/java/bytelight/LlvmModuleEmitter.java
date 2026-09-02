@@ -1,4 +1,4 @@
-package tinyjava;
+package bytelight;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -90,7 +90,7 @@ class LlvmModuleEmitter {
 
     String emit() {
         StringBuilder out = new StringBuilder();
-        out.append("; TinyJava Phase 2 LLVM IR\n");
+        out.append("; ByteLight Phase 2 LLVM IR\n");
         out.append("; Generated from TeaVM 0.12.0 optimized IR\n\n");
 
         // 1. Struct type declarations

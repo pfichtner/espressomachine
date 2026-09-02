@@ -1,5 +1,5 @@
 #!/bin/bash
-# TinyJava approval-style test suite.
+# ByteLight approval-style test suite.
 #
 # Usage:
 #   ./tests/run.sh            — run all tests, exit 1 if any fail
@@ -32,10 +32,10 @@ PASS=0; FAIL=0; SKIP=0
 # Helpers
 # ------------------------------------------------------------------
 
-# Ensure the TinyJava JAR is built.
+# Ensure the ByteLight JAR is built.
 ensure_jar() {
     if [[ ! -f "$TOOL_JAR" ]]; then
-        echo "[setup] Building TinyJava JAR..."
+        echo "[setup] Building ByteLight JAR..."
         (cd teavm-backend/llvm && mvn package -q)
     fi
 }
@@ -136,7 +136,7 @@ run_ll_test "blink" \
     "examples/blink/classes:$API_CLASSES" \
     "Blink"
 
-# Phase 4b: Delay.time — TimeUnit fold to __tinyjava_delay_ms
+# Phase 4b: Delay.time — TimeUnit fold to __bytelight_delay_ms
 run_ll_test "delay-time" \
     "examples/delay-time/classes:$API_CLASSES" \
     "DelayTime"
