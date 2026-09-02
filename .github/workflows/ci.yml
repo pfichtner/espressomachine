@@ -25,6 +25,12 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y llvm-18 binutils-avr
 
+      - name: Install websocat
+        run: |
+          curl -sSL https://github.com/vi/websocat/releases/download/v1.13.0/websocat.x86_64-unknown-linux-musl \
+            -o /usr/local/bin/websocat
+          chmod +x /usr/local/bin/websocat
+
       - name: Build compiler backend
         run: mvn package -q -f teavm-backend/llvm/pom.xml
 
@@ -33,9 +39,6 @@ jobs:
 
       - name: Run tests
         run: bash tests/run.sh
-
-      - name: Install Node.js dependencies
-        run: npm ci
 
       - name: Run virtualavr system test
         run: bash tests/systemtest-blink.sh
