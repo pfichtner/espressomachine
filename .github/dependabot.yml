@@ -8,7 +8,21 @@ updates:
     assignees:
       - pfichtner
   - package-ecosystem: maven
-    directory: "/"
+    directory: "/examples"
+    schedule:
+      interval: "daily"
+      time: "04:42"
+    assignees:
+      - pfichtner
+  - package-ecosystem: maven
+    directory: "/runtime/api"
+    schedule:
+      interval: "daily"
+      time: "04:42"
+    assignees:
+      - pfichtner
+  - package-ecosystem: maven
+    directory: "/teavm-backend/llvm"
     schedule:
       interval: "daily"
       time: "04:42"
