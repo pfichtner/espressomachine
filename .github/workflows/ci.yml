@@ -40,5 +40,11 @@ jobs:
       - name: Run tests
         run: bash tests/run.sh
 
-      - name: Run virtualavr system test
+      - name: Run virtualavr system test (blink)
         run: bash tests/systemtest-blink.sh
+
+      - name: Run virtualavr system test (serial TX)
+        run: bash tests/systemtest-serial.sh
+
+      - name: Run virtualavr system test (serial echo)
+        run: bash tests/systemtest-echo.sh
