@@ -106,9 +106,11 @@ class AvrIntrinsics {
         }
         if (SERIAL_CLASS.equals(cls)) {
             return switch (method) {
-                case "begin" -> emitSerialBegin(out, args, constVars, tmpCounter, resolveVar);
-                case "write" -> emitSerialWrite(out, args, tmpCounter, resolveVar);
-                default      -> emitFallback(out, insn, args, tmpCounter, resolveVar);
+                case "begin"     -> emitSerialBegin(out, args, constVars, tmpCounter, resolveVar);
+                case "write"     -> emitSerialWrite(out, args, tmpCounter, resolveVar);
+                case "available" -> emitSerialAvailable(out, insn, tmpCounter, resolveVar);
+                case "read"      -> emitSerialRead(out, insn, tmpCounter, resolveVar);
+                default          -> emitFallback(out, insn, args, tmpCounter, resolveVar);
             };
         }
         return tmpCounter;
@@ -301,6 +303,34 @@ class AvrIntrinsics {
         out.append("  call void @__bytelight_serial_write(i32 ")
            .append(resolveVar.apply(args.get(0))).append(")\n");
         return tc;
+    }
+
+    private static int emitSerialAvailable(StringBuilder out, InvokeInstruction insn,
+                                           int tc, Function<Variable, String> resolveVar) {
+        // Read RXC0 (bit 7 = 0x80) from UCSR0A (0xC0 = 192); return 1 if set, 0 otherwise.
+        out.append("  %_t").append(tc)
+           .append(" = load volatile i8, ptr inttoptr (i16 192 to ptr)\n");
+        out.append("  %_t").append(tc + 1)
+           .append(" = and i8 %_t").append(tc).append(", -128\n");
+        out.append("  %_t").append(tc + 2)
+           .append(" = icmp ne i8 %_t").append(tc + 1).append(", 0\n");
+        if (insn.getReceiver() != null) {
+            out.append("  ").append(resolveVar.apply(insn.getReceiver()))
+               .append(" = zext i1 %_t").append(tc + 2).append(" to i32\n");
+        }
+        return tc + 3;
+    }
+
+    private static int emitSerialRead(StringBuilder out, InvokeInstruction insn,
+                                      int tc, Function<Variable, String> resolveVar) {
+        // Read UDR0 (0xC6 = 198) and zero-extend to i32; call available() first.
+        out.append("  %_t").append(tc)
+           .append(" = load volatile i8, ptr inttoptr (i16 198 to ptr)\n");
+        if (insn.getReceiver() != null) {
+            out.append("  ").append(resolveVar.apply(insn.getReceiver()))
+               .append(" = zext i8 %_t").append(tc).append(" to i32\n");
+        }
+        return tc + 1;
     }
 
     // ------------------------------------------------------------------

@@ -48,5 +48,6 @@
         <module>objects</module>
         <module>oop-blink</module>
         <module>serial</module>
+        <module>echo</module>
     </modules>
 </project>
