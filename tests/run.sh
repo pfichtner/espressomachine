@@ -163,6 +163,24 @@ run_ll_test "enum" \
     "EnumTest"
 
 # ------------------------------------------------------------------
+# System integration test (requires Docker + Node.js + AVR toolchain)
+# ------------------------------------------------------------------
+# Run the transpiled Java blink program on virtualavr and verify the LED
+# blinks by watching pin-state messages over WebSocket.
+if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-blink" ]]; then
+    if [[ "$FILTER" == "systemtest-blink" || -z "$FILTER" ]]; then
+        echo "[systemtest-blink]"
+        if bash tests/systemtest-blink.sh; then
+            echo "  PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "  FAIL"
+            FAIL=$((FAIL + 1))
+        fi
+    fi
+fi
+
+# ------------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------------
 echo

@@ -190,6 +190,8 @@ targets/atmega328p/           Linker script, startup assembly, build script
 examples/                     Demonstration programs
 tests/
   run.sh                      Approval-style test runner
+  systemtest-blink.sh         End-to-end blink test on virtualavr (requires Docker)
+  ws-monitor.mjs              Node.js WebSocket pin monitor used by the systemtest
   approved/                   Golden .ll and .hex snapshots
 ```
 
@@ -200,6 +202,39 @@ bash tests/run.sh             # run all 8 tests (exit 1 on any failure)
 bash tests/run.sh <name>      # run a single test (add, controlflow, counter, memory, blink, blink-hex, oop-blink, oop-blink-hex)
 bash tests/run.sh --approve   # overwrite golden files after an intentional change
 ```
+
+### System integration test (virtualavr)
+
+`tests/systemtest-blink.sh` verifies the transpiled Java blink program really
+blinks by running the generated `.hex` inside [virtualavr](https://github.com/pfichtner/virtualavr),
+an AVR simulator running in Docker. It enables digital reporting on pin 13 over
+the simulator's WebSocket endpoint and asserts the pin toggles at least
+`BLINK_TOGGLES` (default 4) times, proving the on/off LED cycle runs correctly
+on simulated hardware.
+
+```bash
+# Requires: Docker + Node.js (with the `ws` npm package installed)
+bash tests/systemtest-blink.sh                # builds Blink.hex, then runs it on virtualavr
+bash tests/systemtest-blink.sh tests/approved/blink.hex   # use a pre-built .hex
+```
+
+The systemtest needs Docker, so it is not part of the default `tests/run.sh`
+run. Run it explicitly:
+
+```bash
+bash tests/run.sh systemtest-blink             # systemtest only
+RUN_INTEGRATION_TESTS=1 bash tests/run.sh      # approval tests + systemtest
+```
+
+Configuration is via environment variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `VIRTUALAVR_IMAGE` | `pfichtner/virtualavr:latest` | Docker image to run |
+| `BLINK_PIN` | `13` | Pin to watch for blinking |
+| `BLINK_TIMEOUT` | `30` | Seconds to observe before failing |
+| `BLINK_TOGGLES` | `4` | Minimum on/off toggle count to accept |
+| `BUILD_TIMEOUT` | `180` | Seconds to wait for the container to start |
 
 ## Research notes
 

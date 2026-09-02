@@ -1,0 +1,27 @@
+{
+  "name": "workspace",
+  "version": "1.0.0",
+  "description": "Compiles JVM bytecode produced by standard `javac` into native code for microcontrollers — no JVM, no interpreter, no managed runtime on the MCU.",
+  "main": "index.js",
+  "directories": {
+    "example": "examples",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pfichtner/tinyjava.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/pfichtner/tinyjava/issues"
+  },
+  "homepage": "https://github.com/pfichtner/tinyjava#readme",
+  "dependencies": {
+    "ws": "^8.21.3"
+  }
+}
