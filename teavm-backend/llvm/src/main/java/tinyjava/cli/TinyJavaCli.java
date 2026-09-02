@@ -6,6 +6,9 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+
 import tinyjava.IrDumper;
 
 /**
@@ -127,8 +130,8 @@ public class TinyJavaCli {
         String outputDir;    // --output
         String outputFile;   // -o (for emit-llvm)
         String port;         // --port (for flash)
-        java.util.List<String> positionals = new java.util.ArrayList<>();
-        java.util.List<String> extraCp = new java.util.ArrayList<>();
+        List<String> positionals = new ArrayList<>();
+        List<String> extraCp = new ArrayList<>();
 
         static Opts parse(String[] args) {
             Opts o = new Opts();
@@ -188,11 +191,6 @@ public class TinyJavaCli {
                     die("Missing entry class name. Usage: tinyjava <cmd> <dir> <ClassName>");
                 }
             }
-        }
-
-        private String buildCp(String base) {
-            if (extraCp.isEmpty()) return base;
-            return base + ":" + String.join(":", extraCp);
         }
     }
 

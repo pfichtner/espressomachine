@@ -1,12 +1,11 @@
 package tinyjava;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.teavm.model.BasicBlock;
 import org.teavm.model.FieldReference;
 import org.teavm.model.Instruction;
