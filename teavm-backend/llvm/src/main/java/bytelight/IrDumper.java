@@ -197,7 +197,49 @@ public class IrDumper {
 
         @Override
         public List<ClassHolderTransformer> getTransformers() {
-            return emptyList();
+            // Replace JDK/TeaVM method bodies with trivial return stubs so TeaVM
+            // never encounters invokedynamic instructions (e.g. java.lang.Enum
+            // uses a lambda in enumConstantDirectory which TeaVM 0.12 can't handle).
+            // Using an actual (empty) program instead of null lets TeaVM inline and
+            // eliminate trivial calls like Object.<init>() so they don't appear as
+            // undefined symbols in the LLVM output.
+            return List.of((cls, ctx) -> {
+                if (LlvmModuleEmitter.isJavaLangObject(cls.getName())) {
+                    for (var method : cls.getMethods()) {
+                        if (method.getProgram() != null) {
+                            method.setProgram(makeReturnStub(method));
+                        }
+                    }
+                }
+            });
+        }
+
+        private static Program makeReturnStub(MethodHolder method) {
+            var prog = new Program();
+            var bb = prog.createBasicBlock();
+            // Create a variable for `this` (instance methods) plus one per parameter,
+            // so TeaVM's optimizer doesn't crash on an empty variable table.
+            boolean isStatic = method.hasModifier(org.teavm.model.ElementModifier.STATIC);
+            int paramSlots = Math.max(1, (isStatic ? 0 : 1) + method.parameterCount());
+            for (int i = 0; i < paramSlots; i++) prog.createVariable();
+            var returnType = method.getResultType();
+            var exit = new ExitInstruction();
+            if (returnType != ValueType.VOID) {
+                var returnVar = prog.createVariable();
+                if (returnType instanceof ValueType.Primitive prim) {
+                    switch (prim.getKind()) {
+                        case LONG -> { var i = new LongConstantInstruction(); i.setReceiver(returnVar); bb.add(i); }
+                        case FLOAT -> { var i = new FloatConstantInstruction(); i.setReceiver(returnVar); bb.add(i); }
+                        case DOUBLE -> { var i = new DoubleConstantInstruction(); i.setReceiver(returnVar); bb.add(i); }
+                        default -> { var i = new IntegerConstantInstruction(); i.setReceiver(returnVar); bb.add(i); }
+                    }
+                } else {
+                    var i = new NullConstantInstruction(); i.setReceiver(returnVar); bb.add(i);
+                }
+                exit.setValueToReturn(returnVar);
+            }
+            bb.add(exit);
+            return prog;
         }
 
         @Override
