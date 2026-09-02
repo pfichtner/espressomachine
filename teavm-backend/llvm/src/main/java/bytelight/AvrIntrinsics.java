@@ -30,8 +30,9 @@ import org.teavm.model.instructions.InvokeInstruction;
  */
 class AvrIntrinsics {
 
-    static final String GPIO_CLASS = "bytelight.api.GPIO";
-    static final String DELAY_CLASS = "bytelight.api.Delay";
+    static final String GPIO_CLASS   = "bytelight.api.GPIO";
+    static final String DELAY_CLASS  = "bytelight.api.Delay";
+    static final String SERIAL_CLASS = "bytelight.api.Serial";
 
     // ---- ATmega328P pin table ----
     // Index = Arduino pin number; value = {DDR addr, PORT addr, bit mask}
@@ -64,7 +65,7 @@ class AvrIntrinsics {
 
     static boolean isIntrinsic(InvokeInstruction insn) {
         String cls = insn.getMethod().getClassName();
-        return GPIO_CLASS.equals(cls) || DELAY_CLASS.equals(cls);
+        return GPIO_CLASS.equals(cls) || DELAY_CLASS.equals(cls) || SERIAL_CLASS.equals(cls);
     }
 
     // ------------------------------------------------------------------
@@ -101,6 +102,13 @@ class AvrIntrinsics {
                 case "ms"   -> emitDelayMs(out, args, tmpCounter, resolveVar);
                 case "time" -> emitDelayTime(out, args, constVars, objectRefs, tmpCounter, resolveVar);
                 default     -> emitFallback(out, insn, args, tmpCounter, resolveVar);
+            };
+        }
+        if (SERIAL_CLASS.equals(cls)) {
+            return switch (method) {
+                case "begin" -> emitSerialBegin(out, args, constVars, tmpCounter, resolveVar);
+                case "write" -> emitSerialWrite(out, args, tmpCounter, resolveVar);
+                default      -> emitFallback(out, insn, args, tmpCounter, resolveVar);
             };
         }
         return tmpCounter;
@@ -264,6 +272,38 @@ class AvrIntrinsics {
     }
 
     // ------------------------------------------------------------------
+    // Serial intrinsics
+    // ------------------------------------------------------------------
+
+    private static final int F_CPU = 16_000_000; // ATmega328P @ 16 MHz
+
+    private static int emitSerialBegin(StringBuilder out, List<? extends Variable> args,
+                                       Map<Integer, String> constVars, int tc,
+                                       Function<Variable, String> resolveVar) {
+        Integer baud = constInt(args.get(0), constVars);
+        if (baud != null && baud > 0) {
+            int ubrr = F_CPU / (16 * baud) - 1;
+            out.append("  store volatile i8 ").append((ubrr >> 8) & 0xFF)
+               .append(", ptr inttoptr (i16 197 to ptr)\n");  // UBRR0H
+            out.append("  store volatile i8 ").append(ubrr & 0xFF)
+               .append(", ptr inttoptr (i16 196 to ptr)\n");  // UBRR0L
+            out.append("  store volatile i8 24, ptr inttoptr (i16 193 to ptr)\n"); // UCSR0B = RXEN|TXEN
+            out.append("  store volatile i8 6,  ptr inttoptr (i16 194 to ptr)\n"); // UCSR0C = 8N1
+        } else {
+            out.append("  call void @__bytelight_serial_begin(i32 ")
+               .append(resolveVar.apply(args.get(0))).append(")\n");
+        }
+        return tc;
+    }
+
+    private static int emitSerialWrite(StringBuilder out, List<? extends Variable> args,
+                                       int tc, Function<Variable, String> resolveVar) {
+        out.append("  call void @__bytelight_serial_write(i32 ")
+           .append(resolveVar.apply(args.get(0))).append(")\n");
+        return tc;
+    }
+
+    // ------------------------------------------------------------------
     // Fallback: generic external call
     // ------------------------------------------------------------------
 
@@ -309,6 +349,13 @@ class AvrIntrinsics {
                 declare void @__bytelight_gpio_pinmode(i32 %pin, i32 %mode)
                 declare void @__bytelight_gpio_digitalwrite(i32 %pin, i32 %value)
                 declare void @__bytelight_delay_ms(i32 %ms)
+                """;
+    }
+
+    static String serialDeclarations() {
+        return """
+                declare void @__bytelight_serial_begin(i32 %baud)
+                declare void @__bytelight_serial_write(i32 %b)
                 """;
     }
 }

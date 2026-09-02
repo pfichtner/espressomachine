@@ -3,6 +3,9 @@ package bytelight.cli;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Orchestrates the ByteLight compilation pipeline from LLVM IR to a flashable HEX file.
@@ -36,6 +39,9 @@ class Pipeline {
         String mcu = readTargetVar(targetDir, "MCU", "atmega328p");
         String delayIters = readTargetVar(targetDir, "DELAY_ITERS", "4000");
 
+        // Detect serial usage by scanning the generated LLVM IR for serial write calls.
+        boolean usesSerial = Files.readString(inputLl).contains("@__bytelight_serial_write");
+
         System.out.println("[2/6] Assembling startup.S ...");
         Path startupS = substituteStartup(scriptsDir, entryClass);
         run("avr-as", "-mmcu=" + mcu, startupS.toString(), "-o",
@@ -57,14 +63,25 @@ class Pipeline {
                 "-o", outputDir.resolve("delay.o").toString(),
                 calibratedDelay.toString());
 
+        if (usesSerial) {
+            System.out.println("[5b/6] Compiling serial.ll → serial.o ...");
+            run("llc-18", "-march=avr", "-mcpu=" + mcu, "-filetype=obj",
+                    "-o", outputDir.resolve("serial.o").toString(),
+                    targetDir.resolve("serial.ll").toString());
+        }
+
         System.out.println("[6/6] Linking → " + entryClass + ".elf ...");
-        run("avr-ld",
+        List<String> linkArgs = new ArrayList<>(Arrays.asList(
+                "avr-ld",
                 "-T", scriptsDir.resolve("linker.ld").toString(),
                 outputDir.resolve("startup.o").toString(),
                 outputDir.resolve(entryClass + ".o").toString(),
                 outputDir.resolve("gpio.o").toString(),
-                outputDir.resolve("delay.o").toString(),
-                "-o", outputDir.resolve(entryClass + ".elf").toString());
+                outputDir.resolve("delay.o").toString()));
+        if (usesSerial) linkArgs.add(outputDir.resolve("serial.o").toString());
+        linkArgs.add("-o");
+        linkArgs.add(outputDir.resolve(entryClass + ".elf").toString());
+        run(linkArgs.toArray(new String[0]));
 
         run("avr-objcopy", "-O", "ihex", "-R", ".eeprom",
                 outputDir.resolve(entryClass + ".elf").toString(),

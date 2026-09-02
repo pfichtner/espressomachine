@@ -47,5 +47,6 @@
         <module>memory</module>
         <module>objects</module>
         <module>oop-blink</module>
+        <module>serial</module>
     </modules>
 </project>
