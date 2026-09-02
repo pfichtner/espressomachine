@@ -2,6 +2,8 @@ package tinyjava;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.InvokeInstruction;
 
@@ -81,7 +83,7 @@ class AvrIntrinsics {
      */
     static int emit(StringBuilder out, InvokeInstruction insn,
                     Map<Integer, String> constVars, int tmpCounter,
-                    java.util.function.Function<Variable, String> resolveVar,
+                    Function<Variable, String> resolveVar,
                     Map<Integer, String> objectRefs) {
         String cls = insn.getMethod().getClassName();
         String method = insn.getMethod().getName();
@@ -110,7 +112,7 @@ class AvrIntrinsics {
 
     private static int emitPinMode(StringBuilder out, List<? extends Variable> args,
                                    Map<Integer, String> constVars, int tc,
-                                   java.util.function.Function<Variable, String> resolveVar) {
+                                   Function<Variable, String> resolveVar) {
         Integer pin  = constInt(args.get(0), constVars);
         Integer mode = constInt(args.get(1), constVars);
 
@@ -151,7 +153,7 @@ class AvrIntrinsics {
 
     private static int emitDigitalWrite(StringBuilder out, List<? extends Variable> args,
                                         Map<Integer, String> constVars, int tc,
-                                        java.util.function.Function<Variable, String> resolveVar) {
+                                        Function<Variable, String> resolveVar) {
         Integer pin   = constInt(args.get(0), constVars);
         Integer value = constInt(args.get(1), constVars);
 
@@ -190,7 +192,7 @@ class AvrIntrinsics {
 
     private static int emitDelayMs(StringBuilder out, List<? extends Variable> args,
                                    int tc,
-                                   java.util.function.Function<Variable, String> resolveVar) {
+                                   Function<Variable, String> resolveVar) {
         out.append("  call void @__tinyjava_delay_ms(i32 ")
            .append(resolveVar.apply(args.get(0))).append(")\n");
         return tc;
@@ -208,7 +210,7 @@ class AvrIntrinsics {
     private static int emitDelayTime(StringBuilder out, List<? extends Variable> args,
                                      Map<Integer, String> constVars,
                                      Map<Integer, String> objectRefs, int tc,
-                                     java.util.function.Function<Variable, String> resolveVar) {
+                                     Function<Variable, String> resolveVar) {
         String unitGlobal = (args.size() > 1) ? objectRefs.get(args.get(1).getIndex()) : null;
         Integer denominator = null;   // unit < 1 ms (nanos/micros)
         long multiplier = 1;          // unit >= 1 ms
@@ -267,7 +269,7 @@ class AvrIntrinsics {
 
     private static int emitFallback(StringBuilder out, InvokeInstruction insn,
                                     List<? extends Variable> args, int tc,
-                                    java.util.function.Function<Variable, String> resolveVar) {
+                                    Function<Variable, String> resolveVar) {
         out.append("  call void @__tinyjava_")
            .append(insn.getMethod().getClassName().toLowerCase()).append("_")
            .append(insn.getMethod().getName()).append("(");

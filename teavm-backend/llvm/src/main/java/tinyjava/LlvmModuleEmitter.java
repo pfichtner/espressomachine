@@ -7,13 +7,13 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.teavm.model.BasicBlock;
 import org.teavm.model.ClassHolder;
 import org.teavm.model.FieldHolder;
 import org.teavm.model.FieldReference;
 import org.teavm.model.Instruction;
 import org.teavm.model.ListableClassHolderSource;
-import org.teavm.model.MethodHolder;
 import org.teavm.model.MethodReader;
 import org.teavm.model.Program;
 import org.teavm.model.ValueType;
@@ -32,7 +32,9 @@ import org.teavm.model.instructions.InvokeInstruction;
  */
 class LlvmModuleEmitter {
 
-    final ListableClassHolderSource classes;
+    private static final String JAVA_LANG_ENUM = Enum.class.getName();
+
+	final ListableClassHolderSource classes;
     // postOptPrograms/Methods come from afterOptimizations callbacks
     private final LinkedHashMap<String, Program> postOptPrograms;
     private final LinkedHashMap<String, MethodReader> postOptMethods;
@@ -59,7 +61,7 @@ class LlvmModuleEmitter {
         // Detect enum classes first so field indexing is correct.
         for (String name : classes.getClassNames()) {
             ClassHolder cls = classes.get(name);
-            if (cls != null && "java.lang.Enum".equals(cls.getParent())) {
+            if (cls != null && JAVA_LANG_ENUM.equals(cls.getParent())) {
                 enumClasses.add(name);
             }
         }
@@ -101,8 +103,8 @@ class LlvmModuleEmitter {
         out.append(AvrIntrinsics.runtimeDeclarations()).append("\n");
 
         // 3. External declarations (java.lang.Object methods etc.)
-        java.util.Set<String> defined = collectDefinedNames();
-        java.util.Set<String> called = collectCalledNames();
+        Set<String> defined = collectDefinedNames();
+        Set<String> called = collectCalledNames();
 
         // 4. Method definitions
         StringBuilder methods = new StringBuilder();
@@ -279,8 +281,8 @@ class LlvmModuleEmitter {
         return names;
     }
 
-    private java.util.Set<String> collectDefinedNames() {
-        var defined = new java.util.LinkedHashSet<String>();
+    private Set<String> collectDefinedNames() {
+        var defined = new LinkedHashSet<String>();
         for (var entry : postOptMethods.entrySet()) {
             MethodReader m = entry.getValue();
             if (m != null && !isJavaLangObject(m.getReference().getClassName())) {
@@ -290,8 +292,8 @@ class LlvmModuleEmitter {
         return defined;
     }
 
-    private java.util.Set<String> collectCalledNames() {
-        var called = new java.util.LinkedHashSet<String>();
+    private Set<String> collectCalledNames() {
+        var called = new LinkedHashSet<String>();
         for (var entry : postOptPrograms.entrySet()) {
             Program prog = entry.getValue();
             if (prog == null) continue;

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.teavm.model.BasicBlock;
 import org.teavm.model.Instruction;
 import org.teavm.model.MethodReader;
@@ -13,6 +14,7 @@ import org.teavm.model.ValueType;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.AbstractInstructionVisitor;
 import org.teavm.model.instructions.AssignInstruction;
+import org.teavm.model.instructions.BinaryBranchingCondition;
 import org.teavm.model.instructions.BinaryBranchingInstruction;
 import org.teavm.model.instructions.BinaryInstruction;
 import org.teavm.model.instructions.BinaryOperation;
@@ -20,21 +22,31 @@ import org.teavm.model.instructions.BranchingCondition;
 import org.teavm.model.instructions.BranchingInstruction;
 import org.teavm.model.instructions.CastIntegerInstruction;
 import org.teavm.model.instructions.CastNumberInstruction;
+import org.teavm.model.instructions.ConstructArrayInstruction;
+import org.teavm.model.instructions.ConstructInstruction;
 import org.teavm.model.instructions.DoubleConstantInstruction;
+import org.teavm.model.instructions.EmptyInstruction;
 import org.teavm.model.instructions.ExitInstruction;
 import org.teavm.model.instructions.FloatConstantInstruction;
+import org.teavm.model.instructions.GetElementInstruction;
+import org.teavm.model.instructions.GetFieldInstruction;
 import org.teavm.model.instructions.InitClassInstruction;
 import org.teavm.model.instructions.IntegerConstantInstruction;
+import org.teavm.model.instructions.IntegerSubtype;
 import org.teavm.model.instructions.InvokeInstruction;
 import org.teavm.model.instructions.JumpInstruction;
 import org.teavm.model.instructions.LongConstantInstruction;
+import org.teavm.model.instructions.MonitorEnterInstruction;
+import org.teavm.model.instructions.MonitorExitInstruction;
 import org.teavm.model.instructions.NegateInstruction;
 import org.teavm.model.instructions.NullCheckInstruction;
-import org.teavm.model.instructions.ConstructInstruction;
-import org.teavm.model.instructions.GetFieldInstruction;
 import org.teavm.model.instructions.NullConstantInstruction;
-import org.teavm.model.instructions.StringConstantInstruction;
+import org.teavm.model.instructions.NumericOperandType;
+import org.teavm.model.instructions.PutElementInstruction;
 import org.teavm.model.instructions.PutFieldInstruction;
+import org.teavm.model.instructions.RaiseInstruction;
+import org.teavm.model.instructions.StringConstantInstruction;
+import org.teavm.model.instructions.SwitchInstruction;
 
 /**
  * Translates a single TeaVM method Program to LLVM IR text.
@@ -44,7 +56,9 @@ import org.teavm.model.instructions.PutFieldInstruction;
  */
 class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
-    // When a variable holds the result of a COMPARE instruction we record the
+    private static final String JAVA_LANG_ENUM = Enum.class.getName();
+
+	// When a variable holds the result of a COMPARE instruction we record the
     // two operands and the operation so we can fuse it with the following branch.
     record CompareInfo(String op, String a, String b) {}
 
@@ -67,9 +81,6 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     private final MethodReader method;
     // May be null (Phase 0/1 compatibility).
     private final LlvmModuleEmitter module;
-
-    // Set before each instruction is visited so visitor methods can refer to it.
-    private int currentBlock = -1;
 
     LlvmMethodEmitter(StringBuilder out, Program program, MethodReader method) {
         this(out, program, method, null);
@@ -105,7 +116,6 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         for (int i = 0; i < program.basicBlockCount(); i++) {
             BasicBlock bb = program.basicBlockAt(i);
             if (bb == null) continue;
-            currentBlock = i;
             emitBlock(bb, i);
         }
         out.append("}\n\n");
@@ -247,8 +257,8 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     @Override
     public void visit(NegateInstruction insn) {
         String type = llvmNumericType(insn.getOperandType());
-        String zero = insn.getOperandType() == org.teavm.model.instructions.NumericOperandType.FLOAT
-                || insn.getOperandType() == org.teavm.model.instructions.NumericOperandType.DOUBLE
+        String zero = insn.getOperandType() == NumericOperandType.FLOAT
+                || insn.getOperandType() == NumericOperandType.DOUBLE
                 ? "fneg " + type + " " + resolveVar(insn.getOperand())
                 : "sub " + type + " 0, " + resolveVar(insn.getOperand());
         out.append("  ").append(v(insn.getReceiver())).append(" = ").append(zero).append("\n");
@@ -333,8 +343,8 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
             case NOT_EQUAL, REFERENCE_NOT_EQUAL -> "ne";
         };
         // REFERENCE_EQUAL/NOT_EQUAL compare object references (ptr); others compare integers.
-        boolean isRef = insn.getCondition() == org.teavm.model.instructions.BinaryBranchingCondition.REFERENCE_EQUAL
-                     || insn.getCondition() == org.teavm.model.instructions.BinaryBranchingCondition.REFERENCE_NOT_EQUAL;
+        boolean isRef = insn.getCondition() == BinaryBranchingCondition.REFERENCE_EQUAL
+                     || insn.getCondition() == BinaryBranchingCondition.REFERENCE_NOT_EQUAL;
         String type = isRef ? "ptr" : "i32";
         out.append("  ").append(tmp).append(" = icmp ").append(icmpOp).append(" ")
            .append(type).append(" ")
@@ -364,7 +374,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
             // In both cases: store the ordinal into the enum struct, discard the name String.
             boolean isEnumInit = "<init>".equals(calledMethod)
                     && (enumClassName.equals(calledClass)
-                        || "java.lang.Enum".equals(calledClass));
+                        || JAVA_LANG_ENUM.equals(calledClass));
             if (isEnumInit) {
                 Variable ordinalVar = insn.getArguments().get(1);  // arg0=name(ptr), arg1=ordinal
                 String thisPtr   = resolveVar(insn.getInstance());
@@ -389,7 +399,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
         // ---- java.lang.Enum.<init> from within an enum constructor ----
         // Intercept: store the ordinal (arg[1]) to the enum struct; skip the String name.
-        if ("java.lang.Enum".equals(calledClass) && "<init>".equals(calledMethod)
+        if (JAVA_LANG_ENUM.equals(calledClass) && "<init>".equals(calledMethod)
                 && enumClassName != null && "<init>".equals(method.getName())) {
             Variable ordinalVar = insn.getArguments().get(1);  // arg0=name, arg1=ordinal
             String thisPtr   = resolveVar(insn.getInstance());
@@ -404,7 +414,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         }
 
         // ---- Enum.name() / Enum.toString() — requires String heap ----
-        if ("java.lang.Enum".equals(calledClass)
+        if (JAVA_LANG_ENUM.equals(calledClass)
                 && ("name".equals(calledMethod) || "toString".equals(calledMethod)
                     || "ordinal".equals(calledMethod))) {
             if ("ordinal".equals(calledMethod) && insn.getReceiver() != null) {
@@ -623,22 +633,22 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     }
 
     @Override
-    public void visit(org.teavm.model.instructions.EmptyInstruction insn) {
+    public void visit(EmptyInstruction insn) {
         // no-op
     }
 
     @Override
-    public void visit(org.teavm.model.instructions.MonitorEnterInstruction insn) {
+    public void visit(MonitorEnterInstruction insn) {
         out.append("  ; monitorenter (unsupported — no threading)\n");
     }
 
     @Override
-    public void visit(org.teavm.model.instructions.MonitorExitInstruction insn) {
+    public void visit(MonitorExitInstruction insn) {
         out.append("  ; monitorexit (unsupported — no threading)\n");
     }
 
     @Override
-    public void visit(org.teavm.model.instructions.SwitchInstruction insn) {
+    public void visit(SwitchInstruction insn) {
         String cond = resolveVar(insn.getCondition());
         out.append("  switch i32 ").append(cond)
            .append(", label %").append(bbLabel(insn.getDefaultTarget().getIndex())).append(" [\n");
@@ -650,14 +660,14 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     }
 
     @Override
-    public void visit(org.teavm.model.instructions.RaiseInstruction insn) {
+    public void visit(RaiseInstruction insn) {
         // Exceptions not supported on embedded — terminate the block with unreachable.
         out.append("  ; throw (exceptions not supported on embedded targets)\n");
         out.append("  unreachable\n");
     }
 
     @Override
-    public void visit(org.teavm.model.instructions.ConstructArrayInstruction insn) {
+    public void visit(ConstructArrayInstruction insn) {
         // Array allocation is not supported on embedded (no heap).
         // In enum <clinit> the array is for $VALUES — emit null ptr so putstatic is valid.
         if (!inEnumClinit) {
@@ -667,13 +677,13 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     }
 
     @Override
-    public void visit(org.teavm.model.instructions.PutElementInstruction insn) {
+    public void visit(PutElementInstruction insn) {
         if (inEnumClinit) return;  // skip $VALUES array stores
         out.append("  ; ERROR: array element store not supported on embedded targets\n");
     }
 
     @Override
-    public void visit(org.teavm.model.instructions.GetElementInstruction insn) {
+    public void visit(GetElementInstruction insn) {
         if (inEnumClinit) return;
         out.append("  ; array element load — arrays not supported on embedded targets\n");
         if (insn.getReceiver() != null) {
@@ -724,7 +734,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         return "i32";
     }
 
-    private static String llvmNumericType(org.teavm.model.instructions.NumericOperandType t) {
+    private static String llvmNumericType(NumericOperandType t) {
         return switch (t) {
             case INT -> "i32";
             case LONG -> "i64";
@@ -733,10 +743,9 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         };
     }
 
-    private static String binaryOp(BinaryOperation op,
-                                   org.teavm.model.instructions.NumericOperandType type) {
-        boolean fp = type == org.teavm.model.instructions.NumericOperandType.FLOAT
-                  || type == org.teavm.model.instructions.NumericOperandType.DOUBLE;
+    private static String binaryOp(BinaryOperation op, NumericOperandType type) {
+        boolean fp = type == NumericOperandType.FLOAT
+                  || type == NumericOperandType.DOUBLE;
         return switch (op) {
             case ADD -> fp ? "fadd" : "add";
             case SUBTRACT -> fp ? "fsub" : "sub";
@@ -787,12 +796,12 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         };
     }
 
-    private static String numericCast(org.teavm.model.instructions.NumericOperandType from,
-                                      org.teavm.model.instructions.NumericOperandType to) {
-        boolean fromFP = from == org.teavm.model.instructions.NumericOperandType.FLOAT
-                      || from == org.teavm.model.instructions.NumericOperandType.DOUBLE;
-        boolean toFP = to == org.teavm.model.instructions.NumericOperandType.FLOAT
-                    || to == org.teavm.model.instructions.NumericOperandType.DOUBLE;
+    private static String numericCast(NumericOperandType from,
+                                      NumericOperandType to) {
+        boolean fromFP = from == NumericOperandType.FLOAT
+                      || from == NumericOperandType.DOUBLE;
+        boolean toFP = to == NumericOperandType.FLOAT
+                    || to == NumericOperandType.DOUBLE;
         int fromBits = typeBits(from);
         int toBits = typeBits(to);
         if (fromFP && toFP) return fromBits < toBits ? "fpext" : "fptrunc";
@@ -801,7 +810,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         return fromBits < toBits ? "sext" : "trunc";
     }
 
-    private static int typeBits(org.teavm.model.instructions.NumericOperandType t) {
+    private static int typeBits(NumericOperandType t) {
         return switch (t) {
             case INT -> 32;
             case LONG -> 64;
@@ -810,7 +819,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         };
     }
 
-    private static String integerSubtypeLLVM(org.teavm.model.instructions.IntegerSubtype t) {
+    private static String integerSubtypeLLVM(IntegerSubtype t) {
         return switch (t) {
             case BYTE -> "i8";
             case SHORT -> "i16";

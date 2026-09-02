@@ -1,48 +1,73 @@
 package tinyjava;
 
+import static java.io.OutputStream.nullOutputStream;
+import static java.nio.file.Files.writeString;
+import static java.util.Collections.emptyList;
+
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
+import java.io.OutputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+
 import org.teavm.dependency.DependencyAnalyzer;
 import org.teavm.dependency.DependencyListener;
-import org.teavm.model.MethodDescriptor;
-import org.teavm.model.MethodReference;
 import org.teavm.model.BasicBlock;
 import org.teavm.model.ClassHolder;
 import org.teavm.model.ClassHolderTransformer;
 import org.teavm.model.FieldHolder;
 import org.teavm.model.Instruction;
 import org.teavm.model.ListableClassHolderSource;
+import org.teavm.model.MethodDescriptor;
 import org.teavm.model.MethodHolder;
 import org.teavm.model.MethodReader;
+import org.teavm.model.MethodReference;
 import org.teavm.model.Phi;
 import org.teavm.model.Program;
+import org.teavm.model.ReferenceCache;
 import org.teavm.model.ValueType;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.AbstractInstructionVisitor;
+import org.teavm.model.instructions.ArrayLengthInstruction;
 import org.teavm.model.instructions.AssignInstruction;
 import org.teavm.model.instructions.BinaryBranchingInstruction;
 import org.teavm.model.instructions.BinaryInstruction;
+import org.teavm.model.instructions.BoundCheckInstruction;
 import org.teavm.model.instructions.BranchingInstruction;
+import org.teavm.model.instructions.CastInstruction;
+import org.teavm.model.instructions.CastIntegerInstruction;
+import org.teavm.model.instructions.CastNumberInstruction;
+import org.teavm.model.instructions.ClassConstantInstruction;
+import org.teavm.model.instructions.ConstructArrayInstruction;
 import org.teavm.model.instructions.ConstructInstruction;
 import org.teavm.model.instructions.DoubleConstantInstruction;
+import org.teavm.model.instructions.EmptyInstruction;
 import org.teavm.model.instructions.ExitInstruction;
 import org.teavm.model.instructions.FloatConstantInstruction;
+import org.teavm.model.instructions.GetElementInstruction;
 import org.teavm.model.instructions.GetFieldInstruction;
 import org.teavm.model.instructions.InitClassInstruction;
 import org.teavm.model.instructions.IntegerConstantInstruction;
 import org.teavm.model.instructions.InvokeInstruction;
+import org.teavm.model.instructions.IsInstanceInstruction;
 import org.teavm.model.instructions.JumpInstruction;
 import org.teavm.model.instructions.LongConstantInstruction;
-import org.teavm.model.instructions.NullConstantInstruction;
+import org.teavm.model.instructions.MonitorEnterInstruction;
+import org.teavm.model.instructions.MonitorExitInstruction;
+import org.teavm.model.instructions.NegateInstruction;
 import org.teavm.model.instructions.NullCheckInstruction;
+import org.teavm.model.instructions.NullConstantInstruction;
+import org.teavm.model.instructions.PutElementInstruction;
 import org.teavm.model.instructions.PutFieldInstruction;
-import org.teavm.model.ReferenceCache;
+import org.teavm.model.instructions.RaiseInstruction;
+import org.teavm.model.instructions.StringConstantInstruction;
+import org.teavm.model.instructions.SwitchInstruction;
+import org.teavm.model.util.ProgramUtils;
 import org.teavm.model.util.VariableCategoryProvider;
 import org.teavm.parsing.ClasspathClassHolderSource;
 import org.teavm.vm.BuildTarget;
@@ -139,16 +164,13 @@ public class IrDumper {
 
         // Collect programs seen in beforeInlining — includes methods that may be
         // inlined away before emit() receives the final class set.
-        private final java.util.LinkedHashMap<String, Program> preInliningPrograms =
-                new java.util.LinkedHashMap<>();
+        private final LinkedHashMap<String, Program> preInliningPrograms = new LinkedHashMap<>();
 
         // Also collect from afterOptimizations (covers the lazy pipeline and final programs)
-        private final java.util.LinkedHashMap<String, Program> postOptPrograms =
-                new java.util.LinkedHashMap<>();
+        private final LinkedHashMap<String, Program> postOptPrograms = new LinkedHashMap<>();
 
         // Map method reference string → MethodReader for afterOptimizations-captured methods.
-        private final java.util.LinkedHashMap<String, org.teavm.model.MethodReader> postOptMethods =
-                new java.util.LinkedHashMap<>();
+        private final LinkedHashMap<String, org.teavm.model.MethodReader> postOptMethods = new LinkedHashMap<>();
 
         // Saved reference to the ListableClassHolderSource from the last emit() call.
         private ListableClassHolderSource lastClasses;
@@ -175,12 +197,12 @@ public class IrDumper {
 
         @Override
         public List<ClassHolderTransformer> getTransformers() {
-            return Collections.emptyList();
+            return emptyList();
         }
 
         @Override
         public List<DependencyListener> getDependencyListeners() {
-            return Collections.emptyList();
+            return emptyList();
         }
 
         @Override
@@ -190,7 +212,7 @@ public class IrDumper {
 
         @Override
         public List<TeaVMHostExtension> getHostExtensions() {
-            return Collections.emptyList();
+            return emptyList();
         }
 
         @Override
@@ -225,7 +247,7 @@ public class IrDumper {
         public void beforeInlining(Program program, MethodReader method) {
             String key = method.getReference().toString();
             // Copy the program snapshot (TeaVM mutates it during optimization)
-            preInliningPrograms.put(key, org.teavm.model.util.ProgramUtils.copy(program));
+            preInliningPrograms.put(key, ProgramUtils.copy(program));
         }
 
         @Override
@@ -236,7 +258,7 @@ public class IrDumper {
         @Override
         public void afterOptimizations(Program program, MethodReader method) {
             String key = method.getReference().toString();
-            postOptPrograms.put(key, org.teavm.model.util.ProgramUtils.copy(program));
+            postOptPrograms.put(key, ProgramUtils.copy(program));
             postOptMethods.put(key, method);
         }
 
@@ -293,7 +315,7 @@ public class IrDumper {
             System.out.println("=== Emitting LLVM IR → " + llvmOutputPath + " ===");
             var moduleEmitter = new LlvmModuleEmitter(lastClasses, postOptPrograms, postOptMethods);
             String llvm = moduleEmitter.emit();
-            java.nio.file.Files.writeString(java.nio.file.Path.of(llvmOutputPath), llvm);
+            writeString(Path.of(llvmOutputPath), llvm);
             System.out.println("  Wrote " + llvm.length() + " chars to " + llvmOutputPath);
         }
 
@@ -404,7 +426,7 @@ public class IrDumper {
     static class InstructionPrinter extends AbstractInstructionVisitor {
 
         @Override
-        public void visit(org.teavm.model.instructions.IntegerConstantInstruction insn) {
+        public void visit(IntegerConstantInstruction insn) {
             System.out.printf("%s = int_const %d", varName(insn.getReceiver()), insn.getConstant());
         }
 
@@ -429,12 +451,12 @@ public class IrDumper {
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.StringConstantInstruction insn) {
+        public void visit(StringConstantInstruction insn) {
             System.out.printf("%s = string_const \"%s\"", varName(insn.getReceiver()), insn.getConstant());
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.ClassConstantInstruction insn) {
+        public void visit(ClassConstantInstruction insn) {
             System.out.printf("%s = class_const %s", varName(insn.getReceiver()), typeString(insn.getConstant()));
         }
 
@@ -449,7 +471,7 @@ public class IrDumper {
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.NegateInstruction insn) {
+        public void visit(NegateInstruction insn) {
             System.out.printf("%s = %s_neg %s",
                     varName(insn.getReceiver()),
                     insn.getOperandType().name().toLowerCase(),
@@ -566,7 +588,7 @@ public class IrDumper {
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.CastInstruction insn) {
+        public void visit(CastInstruction insn) {
             System.out.printf("%s = cast %s to %s",
                     varName(insn.getReceiver()),
                     varName(insn.getValue()),
@@ -574,7 +596,7 @@ public class IrDumper {
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.CastNumberInstruction insn) {
+        public void visit(CastNumberInstruction insn) {
             System.out.printf("%s = cast_num %s %s -> %s",
                     varName(insn.getReceiver()),
                     insn.getSourceType().name().toLowerCase(),
@@ -583,7 +605,7 @@ public class IrDumper {
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.CastIntegerInstruction insn) {
+        public void visit(CastIntegerInstruction insn) {
             System.out.printf("%s = cast_int %s %s -> %s",
                     varName(insn.getReceiver()),
                     insn.getDirection().name().toLowerCase(),
@@ -592,7 +614,7 @@ public class IrDumper {
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.SwitchInstruction insn) {
+        public void visit(SwitchInstruction insn) {
             System.out.printf("switch %s [", varName(insn.getCondition()));
             for (var entry : insn.getEntries()) {
                 System.out.printf("%d->BB%d ", entry.getCondition(), entry.getTarget().getIndex());
@@ -601,56 +623,56 @@ public class IrDumper {
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.RaiseInstruction insn) {
+        public void visit(RaiseInstruction insn) {
             System.out.printf("throw %s", varName(insn.getException()));
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.IsInstanceInstruction insn) {
+        public void visit(IsInstanceInstruction insn) {
             System.out.printf("%s = instanceof %s : %s",
                     varName(insn.getReceiver()), varName(insn.getValue()), typeString(insn.getType()));
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.ArrayLengthInstruction insn) {
+        public void visit(ArrayLengthInstruction insn) {
             System.out.printf("%s = arraylength %s", varName(insn.getReceiver()), varName(insn.getArray()));
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.GetElementInstruction insn) {
+        public void visit(GetElementInstruction insn) {
             System.out.printf("%s = getelem %s[%s]",
                     varName(insn.getReceiver()), varName(insn.getArray()), varName(insn.getIndex()));
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.PutElementInstruction insn) {
+        public void visit(PutElementInstruction insn) {
             System.out.printf("putelem %s[%s] = %s",
                     varName(insn.getArray()), varName(insn.getIndex()), varName(insn.getValue()));
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.ConstructArrayInstruction insn) {
+        public void visit(ConstructArrayInstruction insn) {
             System.out.printf("%s = new %s[%s]",
                     varName(insn.getReceiver()), typeString(insn.getItemType()), varName(insn.getSize()));
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.EmptyInstruction insn) {
+        public void visit(EmptyInstruction insn) {
             System.out.print("nop");
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.MonitorEnterInstruction insn) {
+        public void visit(MonitorEnterInstruction insn) {
             System.out.printf("monitorenter %s", varName(insn.getObjectRef()));
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.MonitorExitInstruction insn) {
+        public void visit(MonitorExitInstruction insn) {
             System.out.printf("monitorexit %s", varName(insn.getObjectRef()));
         }
 
         @Override
-        public void visit(org.teavm.model.instructions.BoundCheckInstruction insn) {
+        public void visit(BoundCheckInstruction insn) {
             System.out.printf("%s = boundcheck %s in %s",
                     varName(insn.getReceiver()), varName(insn.getIndex()),
                     insn.getArray() != null ? varName(insn.getArray()) : "?");
@@ -663,8 +685,8 @@ public class IrDumper {
 
     static class NullBuildTarget implements BuildTarget {
         @Override
-        public java.io.OutputStream createResource(String fileName) {
-            return java.io.OutputStream.nullOutputStream();
+        public OutputStream createResource(String fileName) {
+            return nullOutputStream();
         }
     }
 }
