@@ -30,8 +30,8 @@ import org.teavm.model.instructions.InvokeInstruction;
  */
 class AvrIntrinsics {
 
-    static final String GPIO_CLASS = "GPIO";
-    static final String DELAY_CLASS = "Delay";
+    static final String GPIO_CLASS = "bytelight.api.GPIO";
+    static final String DELAY_CLASS = "bytelight.api.Delay";
 
     // ---- ATmega328P pin table ----
     // Index = Arduino pin number; value = {DDR addr, PORT addr, bit mask}
@@ -270,8 +270,10 @@ class AvrIntrinsics {
     private static int emitFallback(StringBuilder out, InvokeInstruction insn,
                                     List<? extends Variable> args, int tc,
                                     Function<Variable, String> resolveVar) {
+        String fqn = insn.getMethod().getClassName();
+        String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
         out.append("  call void @__bytelight_")
-           .append(insn.getMethod().getClassName().toLowerCase()).append("_")
+           .append(simpleName.toLowerCase()).append("_")
            .append(insn.getMethod().getName()).append("(");
         for (int i = 0; i < args.size(); i++) {
             if (i > 0) out.append(", ");

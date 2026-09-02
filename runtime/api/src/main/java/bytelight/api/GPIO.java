@@ -1,3 +1,5 @@
+package bytelight.api;
+
 /**
  * ByteLight GPIO API for ATmega328P.
  *

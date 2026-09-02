@@ -1,3 +1,5 @@
+package bytelight.api;
+
 /**
  * ByteLight delay API for ATmega328P (16 MHz).
  *

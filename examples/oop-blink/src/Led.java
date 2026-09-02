@@ -1,3 +1,5 @@
+import bytelight.api.*;
+
 class Led {
     int pin;
 
