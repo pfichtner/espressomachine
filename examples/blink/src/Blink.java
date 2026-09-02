@@ -1,3 +1,5 @@
+import bytelight.api.*;
+
 class Blink {
     static void main() {
         GPIO.pinMode(13, GPIO.OUTPUT);

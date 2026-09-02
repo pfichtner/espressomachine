@@ -1,3 +1,5 @@
+import bytelight.api.*;
+
 class OopBlink {
     static void main() {
         Led led = new Led(13);
