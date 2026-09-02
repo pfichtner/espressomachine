@@ -136,6 +136,11 @@ run_ll_test "blink" \
     "examples/blink/classes:$API_CLASSES" \
     "Blink"
 
+# Phase 4b: Delay.time — TimeUnit fold to __tinyjava_delay_ms
+run_ll_test "delay-time" \
+    "examples/delay-time/classes:$API_CLASSES" \
+    "DelayTime"
+
 # Phase 5: full pipeline — Java → HEX via ATmega328P target
 run_hex_test "blink-hex" \
     "examples/blink/classes:$API_CLASSES" \
@@ -144,7 +149,7 @@ run_hex_test "blink-hex" \
 
 # Phase 7: OOP Blink — Led class with pin field, on()/off() instance methods
 run_ll_test "oop-blink" \
-    "examples/oop-blink/classes" \
+    "examples/oop-blink/classes:$API_CLASSES" \
     "OopBlink"
 
 run_hex_test "oop-blink-hex" \
