@@ -9,4 +9,5 @@ dependency-reduced-pom.xml
 examples/blink/build/delay_*.ll
 examples/blink/build/startup_*.S
 examples/blink/build/api_classes/
+node_modules/
 
