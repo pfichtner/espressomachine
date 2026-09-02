@@ -57,11 +57,10 @@ if [[ -z "$HEX_FILE" ]]; then
         echo "    (AVR toolchain not installed; using approved hex tests/approved/blink.hex)"
         cp "$REPO_ROOT/tests/approved/blink.hex" "$HEX_FILE"
     else
-        # Compile runtime/api stubs so TeaVM can resolve GPIO/Delay
-        mkdir -p "$WORK_DIR/api_classes"
-        javac -encoding UTF-8 "$REPO_ROOT"/runtime/api/*.java -d "$WORK_DIR/api_classes"
+        # Compile all examples (including runtime API stubs) via Maven
+        mvn compile -q -f "$REPO_ROOT/examples/pom.xml"
         if (cd "$REPO_ROOT" && ./bin/bytelight build \
-            --cp "examples/blink/classes:$WORK_DIR/api_classes" \
+            --cp "examples/blink/target/classes:runtime/api/target/classes" \
             Blink \
             --target atmega328p \
             --output "$WORK_DIR/build" > /dev/null 2>&1) && [[ -f "$WORK_DIR/build/Blink.hex" ]]; then
