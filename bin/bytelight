@@ -3,7 +3,7 @@
 # Resolves TINYJAVA_HOME from this script's location and runs the fat JAR.
 set -euo pipefail
 TINYJAVA_HOME="$(cd "$(dirname "$0")/.." && pwd)"
-JAR="$TINYJAVA_HOME/teavm-backend/llvm/target/teavm-ir-dumper-0.1.0-SNAPSHOT.jar"
+JAR="$TINYJAVA_HOME/teavm-backend/llvm/target/bytelight-teavm-ir-dumper-0.1.0-SNAPSHOT.jar"
 if [[ ! -f "$JAR" ]]; then
     echo "bytelight: JAR not found at $JAR" >&2
     echo "Run: cd '$TINYJAVA_HOME/teavm-backend/llvm' && mvn package -q" >&2
