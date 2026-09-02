@@ -31,6 +31,7 @@ BB2:
   %_t3 = or i8 %_t2, 32
   store volatile i8 %_t3, ptr inttoptr (i16 37 to ptr)
   %v6 = add i64 0, 1
+  ; init_class java.util.concurrent.TimeUnit
   %v3 = getelementptr i8, ptr @java_util_concurrent_TimeUnit_SECONDS, i32 0
   call void @__bytelight_delay_ms(i32 1000)
   %v7 = add i32 0, 13
