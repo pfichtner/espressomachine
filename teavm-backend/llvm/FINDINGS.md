@@ -2,7 +2,7 @@
 
 ## Summary
 
-**Verdict: TeaVM is a viable frontend for TinyJava.**
+**Verdict: TeaVM is a viable frontend for ByteLight.**
 
 TeaVM can be embedded as a library, its optimized IR can be enumerated programmatically,
 and a direct mapping to LLVM IR is straightforward for the instructions relevant to embedded code.
@@ -171,7 +171,7 @@ The `teavm-tooling` artifact adds the higher-level `TeaVMTool` wrapper but is no
 
 **No TeaVM classlib is required** for the IR dumper itself. The classlib is needed when the
 compiled program references Java standard library classes (e.g., `System.exit`, `String`, etc.).
-For TinyJava's embedded target, standard library support will be replaced by intrinsics.
+For ByteLight's embedded target, standard library support will be replaced by intrinsics.
 
 ---
 
@@ -392,7 +392,7 @@ BB4:
 
 ### Open questions for Phase 1
 
-- Should the TinyJava backend implement `BranchingInstruction` by pattern-matching the immediately
+- Should the ByteLight backend implement `BranchingInstruction` by pattern-matching the immediately
   preceding compare, or treat the compare result as a boolean `i1`?
   - Recommendation: treat the compare result as a separate SSA variable of type `i1` for generality.
 - How should `InitClassInstruction` be handled? For a static-only embedded target, class

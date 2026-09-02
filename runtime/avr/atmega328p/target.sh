@@ -1,4 +1,4 @@
-# TinyJava target descriptor — ATmega328P @ 16 MHz (Arduino Uno)
+# ByteLight target descriptor — ATmega328P @ 16 MHz (Arduino Uno)
 MCU=atmega328p
 TRIPLE=avr-unknown-unknown
 F_CPU=16000000

@@ -1,4 +1,4 @@
-; TinyJava AVR runtime — GPIO intrinsics (ATmega328P)
+; ByteLight AVR runtime — GPIO intrinsics (ATmega328P)
 ; Fallback implementations for runtime-dispatch paths (non-constant pin numbers).
 ;
 ; These are emitted when the pin or mode could not be resolved at compile time.
@@ -25,7 +25,7 @@
     i8  1, i8  2, i8  4, i8  8, i8 16, i8  32                  ; D8–D13
 ]
 
-define void @__tinyjava_gpio_pinmode(i32 %pin, i32 %mode) {
+define void @__bytelight_gpio_pinmode(i32 %pin, i32 %mode) {
 entry:
   %ddr_idx = getelementptr [14 x i8], ptr @__pin_ddr, i32 0, i32 %pin
   %ddr_byte = load i8, ptr %ddr_idx
@@ -47,7 +47,7 @@ set_in:
   ret void
 }
 
-define void @__tinyjava_gpio_digitalwrite(i32 %pin, i32 %value) {
+define void @__bytelight_gpio_digitalwrite(i32 %pin, i32 %value) {
 entry:
   %port_idx = getelementptr [14 x i8], ptr @__pin_port, i32 0, i32 %pin
   %port_byte = load i8, ptr %port_idx

@@ -1,4 +1,4 @@
-/* TinyJava ATmega328P linker script
+/* ByteLight ATmega328P linker script
  * CPU: ATmega328P
  * Flash: 32 KB at 0x000000
  * SRAM:   2 KB at 0x800100 (AVR data address space)

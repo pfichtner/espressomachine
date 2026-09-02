@@ -1,4 +1,4 @@
-package tinyjava;
+package bytelight;
 
 import java.util.List;
 import java.util.Map;
@@ -13,7 +13,7 @@ import org.teavm.model.instructions.InvokeInstruction;
  * When the backend encounters a call to GPIO.* or Delay.*, it delegates to this
  * class which either:
  *   a) Inlines the AVR memory-mapped I/O directly (when pin is a compile-time constant),
- *   b) Falls back to an external runtime declaration (@__tinyjava_gpio_*).
+ *   b) Falls back to an external runtime declaration (@__bytelight_gpio_*).
  *
  * ATmega328P register map (memory-mapped addresses):
  *   DDRB  = 0x24  (Data Direction Register B — controls input/output)
@@ -141,7 +141,7 @@ class AvrIntrinsics {
             }
         }
         // Fallback: runtime call
-        out.append("  call void @__tinyjava_gpio_pinmode(i32 ")
+        out.append("  call void @__bytelight_gpio_pinmode(i32 ")
            .append(resolveVar.apply(args.get(0))).append(", i32 ")
            .append(resolveVar.apply(args.get(1))).append(")\n");
         return tc;
@@ -180,7 +180,7 @@ class AvrIntrinsics {
                 return tc;
             }
         }
-        out.append("  call void @__tinyjava_gpio_digitalwrite(i32 ")
+        out.append("  call void @__bytelight_gpio_digitalwrite(i32 ")
            .append(resolveVar.apply(args.get(0))).append(", i32 ")
            .append(resolveVar.apply(args.get(1))).append(")\n");
         return tc;
@@ -193,7 +193,7 @@ class AvrIntrinsics {
     private static int emitDelayMs(StringBuilder out, List<? extends Variable> args,
                                    int tc,
                                    Function<Variable, String> resolveVar) {
-        out.append("  call void @__tinyjava_delay_ms(i32 ")
+        out.append("  call void @__bytelight_delay_ms(i32 ")
            .append(resolveVar.apply(args.get(0))).append(")\n");
         return tc;
     }
@@ -203,9 +203,9 @@ class AvrIntrinsics {
     // ------------------------------------------------------------------
     //
     // Statically computes the millisecond equivalent and lowers straight to
-    // __tinyjava_delay_ms when the TimeUnit argument is a compile-time enum
-    // constant (e.g. Delay.time(1, TimeUnit.SECONDS) → __tinyjava_delay_ms(1000)).
-    // Non-constant units fall back to a runtime __tinyjava_delay_time call.
+    // __bytelight_delay_ms when the TimeUnit argument is a compile-time enum
+    // constant (e.g. Delay.time(1, TimeUnit.SECONDS) → __bytelight_delay_ms(1000)).
+    // Non-constant units fall back to a runtime __bytelight_delay_time call.
 
     private static int emitDelayTime(StringBuilder out, List<? extends Variable> args,
                                      Map<Integer, String> constVars,
@@ -230,7 +230,7 @@ class AvrIntrinsics {
 
         if (unitGlobal == null) {
             // Unknown (non-constant) unit — generic runtime fallback.
-            out.append("  call void @__tinyjava_delay_time(i32 ")
+            out.append("  call void @__bytelight_delay_time(i32 ")
                .append(resolveVar.apply(args.get(0))).append(", i32 ")
                .append(resolveVar.apply(args.get(1))).append(")\n");
             return tc;
@@ -240,7 +240,7 @@ class AvrIntrinsics {
         if (amount != null) {
             // Constant amount + constant unit → statically calculated millis.
             long millis = (denominator != null) ? amount / denominator : amount * multiplier;
-            out.append("  call void @__tinyjava_delay_ms(i32 ").append(millis).append(")\n");
+            out.append("  call void @__bytelight_delay_ms(i32 ").append(millis).append(")\n");
             return tc;
         }
 
@@ -259,7 +259,7 @@ class AvrIntrinsics {
                .append(" = mul i32 ").append(tmp).append(", ").append(multiplier).append("\n");
             tmp = tmp2;
         }
-        out.append("  call void @__tinyjava_delay_ms(i32 ").append(tmp).append(")\n");
+        out.append("  call void @__bytelight_delay_ms(i32 ").append(tmp).append(")\n");
         return tc;
     }
 
@@ -270,7 +270,7 @@ class AvrIntrinsics {
     private static int emitFallback(StringBuilder out, InvokeInstruction insn,
                                     List<? extends Variable> args, int tc,
                                     Function<Variable, String> resolveVar) {
-        out.append("  call void @__tinyjava_")
+        out.append("  call void @__bytelight_")
            .append(insn.getMethod().getClassName().toLowerCase()).append("_")
            .append(insn.getMethod().getName()).append("(");
         for (int i = 0; i < args.size(); i++) {
@@ -304,9 +304,9 @@ class AvrIntrinsics {
      */
     static String runtimeDeclarations() {
         return """
-                declare void @__tinyjava_gpio_pinmode(i32 %pin, i32 %mode)
-                declare void @__tinyjava_gpio_digitalwrite(i32 %pin, i32 %value)
-                declare void @__tinyjava_delay_ms(i32 %ms)
+                declare void @__bytelight_gpio_pinmode(i32 %pin, i32 %mode)
+                declare void @__bytelight_gpio_digitalwrite(i32 %pin, i32 %value)
+                declare void @__bytelight_delay_ms(i32 %ms)
                 """;
     }
 }

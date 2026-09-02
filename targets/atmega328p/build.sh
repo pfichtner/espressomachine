@@ -1,5 +1,5 @@
 #!/bin/bash
-# TinyJava ATmega328P build script
+# ByteLight ATmega328P build script
 #
 # Usage:
 #   ./build.sh <EntryClass.java ...>   — compile from Java source
@@ -41,7 +41,7 @@ fi
 mkdir -p "$BUILD_DIR"
 OUTPUT_LL="$BUILD_DIR/${ENTRY_CLASS}.ll"
 
-echo "=== TinyJava ATmega328P build ==="
+echo "=== ByteLight ATmega328P build ==="
 echo "Target: $MCU @ $(( F_CPU / 1000000 )) MHz  (DELAY_ITERS=$DELAY_ITERS)"
 echo "Entry:  $ENTRY_CLASS"
 echo "Output: $BUILD_DIR/${ENTRY_CLASS}.{elf,hex}"

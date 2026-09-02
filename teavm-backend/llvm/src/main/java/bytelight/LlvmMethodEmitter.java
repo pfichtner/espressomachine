@@ -1,4 +1,4 @@
-package tinyjava;
+package bytelight;
 
 import java.util.ArrayList;
 import java.util.HashMap;
