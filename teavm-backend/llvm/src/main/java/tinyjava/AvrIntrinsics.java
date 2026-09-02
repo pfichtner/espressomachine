@@ -70,16 +70,19 @@ class AvrIntrinsics {
     // ------------------------------------------------------------------
 
     /**
-     * @param out     output buffer
-     * @param insn    the invoke instruction
-     * @param constVars map from variable index to its compile-time integer value (if known)
+     * @param out        output buffer
+     * @param insn       the invoke instruction
+     * @param constVars  map from variable index to its compile-time integer value (if known)
      * @param tmpCounter current temporary counter (incremented as needed)
      * @param resolveVar function to resolve a variable to its LLVM string
+     * @param objectRefs map from variable index to the LLVM global symbol a static
+     *                   object reference (e.g. an enum constant) resolved to
      * @return updated tmpCounter
      */
     static int emit(StringBuilder out, InvokeInstruction insn,
                     Map<Integer, String> constVars, int tmpCounter,
-                    java.util.function.Function<Variable, String> resolveVar) {
+                    java.util.function.Function<Variable, String> resolveVar,
+                    Map<Integer, String> objectRefs) {
         String cls = insn.getMethod().getClassName();
         String method = insn.getMethod().getName();
         List<? extends Variable> args = insn.getArguments();
@@ -93,8 +96,9 @@ class AvrIntrinsics {
         }
         if (DELAY_CLASS.equals(cls)) {
             return switch (method) {
-                case "ms" -> emitDelayMs(out, args, tmpCounter, resolveVar);
-                default   -> emitFallback(out, insn, args, tmpCounter, resolveVar);
+                case "ms"   -> emitDelayMs(out, args, tmpCounter, resolveVar);
+                case "time" -> emitDelayTime(out, args, constVars, objectRefs, tmpCounter, resolveVar);
+                default     -> emitFallback(out, insn, args, tmpCounter, resolveVar);
             };
         }
         return tmpCounter;
@@ -189,6 +193,71 @@ class AvrIntrinsics {
                                    java.util.function.Function<Variable, String> resolveVar) {
         out.append("  call void @__tinyjava_delay_ms(i32 ")
            .append(resolveVar.apply(args.get(0))).append(")\n");
+        return tc;
+    }
+
+    // ------------------------------------------------------------------
+    // Delay.time(amount, unit)
+    // ------------------------------------------------------------------
+    //
+    // Statically computes the millisecond equivalent and lowers straight to
+    // __tinyjava_delay_ms when the TimeUnit argument is a compile-time enum
+    // constant (e.g. Delay.time(1, TimeUnit.SECONDS) → __tinyjava_delay_ms(1000)).
+    // Non-constant units fall back to a runtime __tinyjava_delay_time call.
+
+    private static int emitDelayTime(StringBuilder out, List<? extends Variable> args,
+                                     Map<Integer, String> constVars,
+                                     Map<Integer, String> objectRefs, int tc,
+                                     java.util.function.Function<Variable, String> resolveVar) {
+        String unitGlobal = (args.size() > 1) ? objectRefs.get(args.get(1).getIndex()) : null;
+        Integer denominator = null;   // unit < 1 ms (nanos/micros)
+        long multiplier = 1;          // unit >= 1 ms
+        if (unitGlobal != null) {
+            String unit = unitGlobal.substring(unitGlobal.lastIndexOf('_') + 1);
+            switch (unit) {
+                case "NANOSECONDS"  -> denominator = 1_000_000;
+                case "MICROSECONDS" -> denominator = 1_000;
+                case "MILLISECONDS" -> { }
+                case "SECONDS"      -> multiplier = 1_000;
+                case "MINUTES"      -> multiplier = 60_000;
+                case "HOURS"        -> multiplier = 3_600_000;
+                case "DAYS"         -> multiplier = 86_400_000;
+                default -> unitGlobal = null;
+            }
+        }
+
+        if (unitGlobal == null) {
+            // Unknown (non-constant) unit — generic runtime fallback.
+            out.append("  call void @__tinyjava_delay_time(i32 ")
+               .append(resolveVar.apply(args.get(0))).append(", i32 ")
+               .append(resolveVar.apply(args.get(1))).append(")\n");
+            return tc;
+        }
+
+        Integer amount = constInt(args.get(0), constVars);
+        if (amount != null) {
+            // Constant amount + constant unit → statically calculated millis.
+            long millis = (denominator != null) ? amount / denominator : amount * multiplier;
+            out.append("  call void @__tinyjava_delay_ms(i32 ").append(millis).append(")\n");
+            return tc;
+        }
+
+        // Runtime amount (i64) with a known unit — scale inline to milliseconds.
+        String tmp = "%_t" + tc++;
+        out.append("  ").append(tmp)
+           .append(" = trunc i64 ").append(resolveVar.apply(args.get(0))).append(" to i32\n");
+        if (denominator != null) {
+            String tmp2 = "%_t" + tc++;
+            out.append("  ").append(tmp2)
+               .append(" = sdiv i32 ").append(tmp).append(", ").append(denominator).append("\n");
+            tmp = tmp2;
+        } else if (multiplier != 1) {
+            String tmp2 = "%_t" + tc++;
+            out.append("  ").append(tmp2)
+               .append(" = mul i32 ").append(tmp).append(", ").append(multiplier).append("\n");
+            tmp = tmp2;
+        }
+        out.append("  call void @__tinyjava_delay_ms(i32 ").append(tmp).append(")\n");
         return tc;
     }
 

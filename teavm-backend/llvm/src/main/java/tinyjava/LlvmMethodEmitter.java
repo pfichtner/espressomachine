@@ -51,6 +51,11 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     // Resolved text form of a variable (may be an inline constant literal).
     private final Map<Integer, String> varLiteral = new HashMap<>();
 
+    // Variable index → LLVM global symbol for a compile-time static object reference
+    // (e.g. an enum constant read such as `TimeUnit.SECONDS`). Used by intrinsic
+    // lowering to identify constant arguments (Delay.time unit, GPIO pin, ...).
+    private final Map<Integer, String> staticObjectRef = new HashMap<>();
+
     // Variables produced by COMPARE instructions (fused into branch icmp).
     private final Map<Integer, CompareInfo> compareVars = new HashMap<>();
 
@@ -201,6 +206,8 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         // Propagate literals through assign chains.
         String lit = varLiteral.get(insn.getAssignee().getIndex());
         if (lit != null) varLiteral.put(insn.getReceiver().getIndex(), lit);
+        String ref = staticObjectRef.get(insn.getAssignee().getIndex());
+        if (ref != null) staticObjectRef.put(insn.getReceiver().getIndex(), ref);
         CompareInfo ci = compareVars.get(insn.getAssignee().getIndex());
         if (ci != null) compareVars.put(insn.getReceiver().getIndex(), ci);
         // Emit a bitcast-style identity for the variable.
@@ -342,7 +349,8 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     public void visit(InvokeInstruction insn) {
         // Check for embedded intrinsics (GPIO, Delay) before regular call emission.
         if (AvrIntrinsics.isIntrinsic(insn)) {
-            tmpCounter = AvrIntrinsics.emit(out, insn, varLiteral, tmpCounter, this::resolveVar);
+            tmpCounter = AvrIntrinsics.emit(out, insn, varLiteral, tmpCounter,
+                    this::resolveVar, staticObjectRef);
             return;
         }
 
@@ -450,6 +458,8 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
                 (k, v) -> { compareVars.put(insn.getReceiver().getIndex(), v); return v; });
         varLiteral.computeIfPresent(insn.getValue().getIndex(),
                 (k, v) -> { varLiteral.put(insn.getReceiver().getIndex(), v); return v; });
+        staticObjectRef.computeIfPresent(insn.getValue().getIndex(),
+                (k, v) -> { staticObjectRef.put(insn.getReceiver().getIndex(), v); return v; });
         out.append("  ").append(v(insn.getReceiver()))
            .append(" = add i32 0, ").append(resolveVar(insn.getValue())).append("\n");
     }
@@ -520,6 +530,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
             ValueType fieldType = staticFieldType(className, fieldName);
             if (isStaticObjectField(className, fieldName)) {
                 // Static object field: the global IS the struct — return ptr to it.
+                staticObjectRef.put(insn.getReceiver().getIndex(), globalName);
                 out.append("  ").append(v(insn.getReceiver()))
                    .append(" = getelementptr i8, ptr ").append(globalName)
                    .append(", i32 0\n");
