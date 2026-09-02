@@ -18,7 +18,7 @@ for arg in "$@"; do
     [[ "$arg" == "--approve" ]] && APPROVE=true || FILTER="$arg"
 done
 
-TOOL_JAR="teavm-backend/llvm/target/teavm-ir-dumper-0.1.0-SNAPSHOT.jar"
+TOOL_JAR="teavm-backend/llvm/target/bytelight-teavm-ir-dumper-0.1.0-SNAPSHOT.jar"
 TJ="java -jar $TOOL_JAR"
 APPROVED_DIR="tests/approved"
 ACTUAL_DIR="tests/actual"
