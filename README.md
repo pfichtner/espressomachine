@@ -1,5 +1,7 @@
 # ByteLight
 
+Write Java. Flash machine code.
+
 Compiles JVM bytecode produced by standard `javac` into native code for microcontrollers — no JVM, no interpreter, no managed runtime on the MCU.
 
 Initial target: **ATmega328P** (Arduino Uno, 16 MHz, 32 KB flash).
