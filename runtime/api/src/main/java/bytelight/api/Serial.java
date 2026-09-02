@@ -18,6 +18,12 @@ public class Serial {
     /** Transmit a single byte (busy-waits until the TX register is empty). */
     public static native void write(int b);
 
+    /** Returns 1 if at least one byte is waiting in the receive buffer, 0 otherwise. */
+    public static native int available();
+
+    /** Read one received byte (0–255). Only call after available() returns non-zero. */
+    public static native int read();
+
     /** Transmit a single character. */
     public static void print(char c) { write(c); }
 

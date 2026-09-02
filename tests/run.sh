@@ -171,6 +171,16 @@ run_hex_test "serial-hex" \
     "HelloSerial" \
     "$APPROVED_DIR/serial.hex"
 
+# Echo: available() inlined as RXC0 bit-check, read() inlined as UDR0 load
+run_ll_test "echo" \
+    "examples/echo/target/classes:$API_CLASSES" \
+    "Echo"
+
+run_hex_test "echo-hex" \
+    "examples/echo/target/classes:$API_CLASSES" \
+    "Echo" \
+    "$APPROVED_DIR/echo.hex"
+
 # ------------------------------------------------------------------
 # System integration test (requires Docker + Node.js + AVR toolchain)
 # ------------------------------------------------------------------
@@ -180,6 +190,21 @@ if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-blink" ]]; the
     if [[ "$FILTER" == "systemtest-blink" || -z "$FILTER" ]]; then
         echo "[systemtest-blink]"
         if bash tests/systemtest-blink.sh; then
+            echo "  PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "  FAIL"
+            FAIL=$((FAIL + 1))
+        fi
+    fi
+fi
+
+# Run the Echo program on virtualavr: send bytes to the PTY and verify the AVR
+# echoes them back, exercising Serial.available() and Serial.read().
+if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-echo" ]]; then
+    if [[ "$FILTER" == "systemtest-echo" || -z "$FILTER" ]]; then
+        echo "[systemtest-echo]"
+        if bash tests/systemtest-echo.sh; then
             echo "  PASS"
             PASS=$((PASS + 1))
         else
