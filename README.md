@@ -1,6 +1,7 @@
 <img align="left" src="https://pfichtner.github.io/assets/espressomachine/espressomachine.jpg" alt="EspressoMachine logo" width="120">
 
 # EspressoMachine
+<br clear="left">
 
 Java bytecode, distilled for microcontrollers.
 
@@ -9,8 +10,6 @@ Write JVM code. Flash machine code.
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://adoptium.net)
 [![GitHub Stars](https://img.shields.io/github/stars/pfichtner/espressomachine?style=social)](https://github.com/pfichtner/espressomachine)
-
-<br clear="left">
 
 Compiles JVM bytecode (`.class` / `.jar`) into native code for microcontrollers — no JVM, no interpreter, no managed runtime on the MCU.
 
