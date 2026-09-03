@@ -98,21 +98,7 @@ Java / Kotlin / Scala / Clojure source
 - **Compile-time GPIO inlining** — `GPIO.digitalWrite(13, HIGH)` with a constant pin number compiles to a single AVR `sbi` instruction.
 - **Serial (USART0)** — `Serial.begin()`, `Serial.print()`, `Serial.println()` backed by a busy-wait AVR runtime; compile-time constant baud rates are inlined as four MMIO stores.
 - **Arduino-style setup/loop** — entry classes without a `main()` can define `static void setup()` / `static void loop()`; ByteLight synthesizes the `main()` wrapper automatically.
-- **Approval-style test suite** — golden `.ll` and `.hex` files catch regressions across all phases.
-
-## Completed phases
-
-| Phase | What |
-|-------|------|
-| 0 | TeaVM feasibility — IR enumerable, backend interface identified |
-| 1 | LLVM IR emitter — arithmetic, if/else, while loops, PHI nodes |
-| 2 | Java objects — LLVM struct types, `getelementptr`, instance methods |
-| 3 | Memory model — escape analysis, static globals, heap compile error |
-| 4 | Embedded intrinsics — GPIO / Delay API, PORTB/DDRB MMIO inlining |
-| 5 | ATmega328P target — startup, linker, `avr-ld`, produces flashable HEX |
-| 6 | First Blink — `Blink.hex` 332 bytes, `sbi`/`cbi` verified by disassembly |
-| 7 | OOP Blink — `Led` class with constructor, fields, instance methods; 328 bytes |
-| CLI | `bytelight build / inspect / emit-llvm / flash` |
+- **Approval-style test suite** — golden `.ll` and `.hex` files catch regressions across all steps.
 
 ## Requirements
 
@@ -309,6 +295,20 @@ Configuration via environment variables:
 | `SERIAL_BAUD` | `9600` | Baud rate (must match `Serial.begin()` in the sketch) |
 | `SERIAL_TIMEOUT` | `30` | Seconds to read from the serial device |
 | `SERIAL_MIN` | `3` | Minimum `'A'` byte count to accept |
+
+## How we got here
+
+| Step | What |
+|------|------|
+| 0 | TeaVM feasibility — IR enumerable, backend interface identified |
+| 1 | LLVM IR emitter — arithmetic, if/else, while loops, PHI nodes |
+| 2 | Java objects — LLVM struct types, `getelementptr`, instance methods |
+| 3 | Memory model — escape analysis, static globals, heap compile error |
+| 4 | Embedded intrinsics — GPIO / Delay API, PORTB/DDRB MMIO inlining |
+| 5 | ATmega328P target — startup, linker, `avr-ld`, produces flashable HEX |
+| 6 | First Blink — `Blink.hex` 332 bytes, `sbi`/`cbi` verified by disassembly |
+| 7 | OOP Blink — `Led` class with constructor, fields, instance methods; 328 bytes |
+| CLI | `bytelight build / inspect / emit-llvm / flash` |
 
 ## Research notes
 
