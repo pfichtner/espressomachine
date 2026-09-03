@@ -34,6 +34,7 @@ class AvrIntrinsics {
     static final String GPIO_CLASS   = "com.github.pfichtner.espressomachine.api.GPIO";
     static final String DELAY_CLASS  = "com.github.pfichtner.espressomachine.api.Delay";
     static final String SERIAL_CLASS = "com.github.pfichtner.espressomachine.api.Serial";
+    static final List<String> ALL_INTRINSICS = List.of(GPIO_CLASS, DELAY_CLASS, SERIAL_CLASS);
 
     // ---- ATmega328P pin table ----
     // Index = Arduino pin number; value = {DDR addr, PORT addr, bit mask}
@@ -65,8 +66,7 @@ class AvrIntrinsics {
     // ------------------------------------------------------------------
 
     static boolean isIntrinsic(InvokeInstruction insn) {
-        String cls = insn.getMethod().getClassName();
-        return GPIO_CLASS.equals(cls) || DELAY_CLASS.equals(cls) || SERIAL_CLASS.equals(cls);
+        return ALL_INTRINSICS.contains(insn.getMethod().getClassName());
     }
 
     // ------------------------------------------------------------------
