@@ -36,3 +36,27 @@ send:
   store volatile i8 %b8, ptr inttoptr (i16 198 to ptr)      ; UDR0
   ret void
 }
+
+; Transmit a null-terminated byte string (pointing at a string-literal global).
+; Iterates the bytes (unsigned char) until a NUL is reached.
+define void @__bytelight_serial_print_str(ptr %s) {
+entry:
+  %p1 = getelementptr i8, ptr %s, i32 0
+  %c1 = load i8, ptr %p1
+  %z1 = icmp eq i8 %c1, 0
+  br i1 %z1, label %done, label %loop_entry
+loop_entry:
+  br label %loop
+loop:
+  %p   = phi ptr [ %p1, %loop_entry ], [ %pnext, %loop ]
+  %c   = phi i8  [ %c1, %loop_entry ], [ %cnext, %loop ]
+  %cu  = zext i8 %c to i32
+  call void @__bytelight_serial_write(i32 %cu)
+  %pnext = getelementptr i8, ptr %p, i32 1
+  %cnext = load i8, ptr %pnext
+  %znext = icmp eq i8 %cnext, 0
+  br i1 %znext, label %done, label %loop
+done:
+  ret void
+}
+

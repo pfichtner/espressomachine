@@ -46,5 +46,22 @@ public class Serial {
     /** Transmit a decimal integer followed by CR+LF. */
     public static void println(int n) { print(n); println(); }
 
+    /**
+     * Transmit a string.
+     *
+     * Native so the backend emits {@code __bytelight_serial_print_str} directly;
+     * Java String iteration (length()/charAt()) is not supported on the embedded
+     * target. Only string literals are supported.
+     */
+    public static native void print(String s);
+
+    /**
+     * Transmit a string followed by CR+LF.
+     *
+     * Native so the backend emits {@code __bytelight_serial_print_str} directly,
+     * then CR+LF. Only string literals are supported.
+     */
+    public static native void println(String s);
+
     private Serial() {}
 }

@@ -46,6 +46,9 @@ class LlvmModuleEmitter {
     // Per-class field types: className → list of ValueType in struct order
     final Map<String, List<ValueType>> fieldTypes = new HashMap<>();
 
+    // De-duplicated string literals → LLVM global byte-array symbol name.
+    final Map<String, String> stringGlobals = new LinkedHashMap<>();
+
     LlvmModuleEmitter(ListableClassHolderSource classes,
                       LinkedHashMap<String, Program> postOptPrograms,
                       LinkedHashMap<String, MethodReader> postOptMethods,
@@ -142,6 +145,11 @@ class LlvmModuleEmitter {
         if (!called.isEmpty()) out.append("\n");
 
         out.append(methods);
+
+        // String literal globals — emitted after methods so the pool is populated
+        // (internString() runs while methods are emitted above).
+        emitStringGlobals(out);
+
         // Arduino-style entry: if the entry class has no static void main() but
         // defines setup()/loop(), synthesize a ClassName_main wrapper that calls
         // setup() once then loops calling loop(). Keep main() winning when present.
@@ -153,6 +161,55 @@ class LlvmModuleEmitter {
             }
         }
         return out.toString();
+    }
+
+    // ------------------------------------------------------------------
+    // String literal globals
+    // ------------------------------------------------------------------
+
+    // Returns the LLVM global symbol for a string literal, registering it in the
+    // pool if not already seen. Each literal becomes a null-terminated byte array
+    // so the Serial runtime can walk it directly. The Java String heap is not
+    // supported, but Serial.print(String)/println(String) lower to these globals.
+    String internString(String literal) {
+        return stringGlobals.computeIfAbsent(literal, lit -> {
+            return "@bytelight_string_" + stringGlobals.size();
+        });
+    }
+
+    private void emitStringGlobals(StringBuilder out) {
+        if (stringGlobals.isEmpty()) return;
+        for (var e : stringGlobals.entrySet()) {
+            String lit = escapeLlvmCString(e.getKey());
+            out.append(e.getValue())
+               .append(" = private unnamed_addr constant [")
+               .append(lit.length() + 1).append(" x i8] c\"")
+               .append(lit).append("\\00\"\n");
+        }
+        out.append("\n");
+    }
+
+    // Escape a Java string for use inside an LLVM c-string literal.
+    private static String escapeLlvmCString(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\' -> sb.append("\\\\");
+                case '"'  -> sb.append("\\22");
+                case '\n' -> sb.append("\\0A");
+                case '\r' -> sb.append("\\0D");
+                case '\t' -> sb.append("\\09");
+                default -> {
+                    if (c < 32 || c > 126) {
+                        sb.append(String.format("\\%02X", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.toString();
     }
 
     // ------------------------------------------------------------------
