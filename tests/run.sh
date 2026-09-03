@@ -181,6 +181,16 @@ run_hex_test "echo-hex" \
     "Echo" \
     "$APPROVED_DIR/echo.hex"
 
+# Arduino-style entry: no main(); setup()/loop() wrapper synthesized
+run_ll_test "setup-loop" \
+    "examples/setup-loop/target/classes" \
+    "ArduinoBlink"
+
+run_hex_test "setup-loop-hex" \
+    "examples/setup-loop/target/classes" \
+    "ArduinoBlink" \
+    "$APPROVED_DIR/setup-loop.hex"
+
 # ------------------------------------------------------------------
 # System integration test (requires Docker + Node.js + AVR toolchain)
 # ------------------------------------------------------------------

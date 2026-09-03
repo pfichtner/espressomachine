@@ -34,10 +34,12 @@ class LlvmModuleEmitter {
 
     private static final String JAVA_LANG_ENUM = Enum.class.getName();
 
-	final ListableClassHolderSource classes;
+    final ListableClassHolderSource classes;
     // postOptPrograms/Methods come from afterOptimizations callbacks
     private final LinkedHashMap<String, Program> postOptPrograms;
     private final LinkedHashMap<String, MethodReader> postOptMethods;
+    // Entry class name; used to resolve the main()/setup()/loop() entry method.
+    private final String entryClass;
 
     // Per-class field layout: className → (fieldName → index-in-struct)
     final Map<String, Map<String, Integer>> fieldIndices = new HashMap<>();
@@ -46,10 +48,12 @@ class LlvmModuleEmitter {
 
     LlvmModuleEmitter(ListableClassHolderSource classes,
                       LinkedHashMap<String, Program> postOptPrograms,
-                      LinkedHashMap<String, MethodReader> postOptMethods) {
+                      LinkedHashMap<String, MethodReader> postOptMethods,
+                      String entryClass) {
         this.classes = classes;
         this.postOptPrograms = postOptPrograms;
         this.postOptMethods = postOptMethods;
+        this.entryClass = entryClass;
         buildFieldMaps();
     }
 
@@ -138,6 +142,10 @@ class LlvmModuleEmitter {
         if (!called.isEmpty()) out.append("\n");
 
         out.append(methods);
+        // Arduino-style entry: if the entry class has no static void main() but
+        // defines setup()/loop(), synthesize a ClassName_main wrapper that calls
+        // setup() once then loops calling loop(). Keep main() winning when present.
+        appendSyntheticMain(out);
         if (!jdkGlobalStubs.isEmpty()) {
             out.append("\n");
             for (String stub : jdkGlobalStubs) {
@@ -342,5 +350,57 @@ class LlvmModuleEmitter {
             }
         }
         return called;
+    }
+
+    // ------------------------------------------------------------------
+    // Arduino-style entry synthesis (setup()/loop())
+    // ------------------------------------------------------------------
+
+    /**
+     * If the entry class has no static void main(), synthesize a ClassName_main
+     * wrapper that calls setup() once and then loops calling loop() forever.
+     * A real main() always wins over setup()/loop().
+     */
+    private void appendSyntheticMain(StringBuilder out) {
+        if (entryClass == null) return;
+        ClassHolder cls = classes.get(entryClass);
+        if (cls == null || isIntrinsicClass(entryClass) || isJavaLangObject(entryClass)) return;
+
+        // A real main() takes precedence — no synthetic wrapper needed.
+        if (hasStaticVoidMethod(cls, "main")) return;
+
+        boolean hasSetup = hasStaticVoidMethod(cls, "setup");
+        boolean hasLoop = hasStaticVoidMethod(cls, "loop");
+        if (!hasSetup && !hasLoop) return;
+
+        String mainName = LlvmMethodEmitter.mangle(entryClass, "main");
+        String setupName = LlvmMethodEmitter.mangle(entryClass, "setup");
+        String loopName = LlvmMethodEmitter.mangle(entryClass, "loop");
+
+        out.append("define void @").append(mainName).append("() {\n");
+        out.append("entry:\n");
+        if (hasSetup) {
+            out.append("  call void @").append(setupName).append("()\n");
+        }
+        out.append("  br label %loop\n");
+        out.append("loop:\n");
+        if (hasLoop) {
+            out.append("  call void @").append(loopName).append("()\n");
+        }
+        out.append("  br label %loop\n");
+        out.append("}\n\n");
+    }
+
+    /** Returns true if {@code cls} declares a static method with the given name and no-arg void signature. */
+    private static boolean hasStaticVoidMethod(ClassHolder cls, String name) {
+        if (cls == null) return false;
+        for (MethodReader method : cls.getMethods()) {
+            if (!name.equals(method.getName())) continue;
+            if (!method.hasModifier(org.teavm.model.ElementModifier.STATIC)) continue;
+            if (method.parameterCount() != 0) continue;
+            if (!ValueType.VOID.equals(method.getResultType())) continue;
+            return true;
+        }
+        return false;
     }
 }

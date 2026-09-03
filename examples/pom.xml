@@ -49,5 +49,6 @@
         <module>oop-blink</module>
         <module>serial</module>
         <module>echo</module>
+        <module>setup-loop</module>
     </modules>
 </project>
