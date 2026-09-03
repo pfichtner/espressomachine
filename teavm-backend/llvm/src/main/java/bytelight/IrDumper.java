@@ -356,7 +356,7 @@ public class IrDumper {
         private void emitLlvm() throws IOException {
             System.out.println();
             System.out.println("=== Emitting LLVM IR → " + llvmOutputPath + " ===");
-            var moduleEmitter = new LlvmModuleEmitter(lastClasses, postOptPrograms, postOptMethods);
+            var moduleEmitter = new LlvmModuleEmitter(lastClasses, postOptPrograms, postOptMethods, rootClassName);
             String llvm = moduleEmitter.emit();
             writeString(Path.of(llvmOutputPath), llvm);
             System.out.println("  Wrote " + llvm.length() + " chars to " + llvmOutputPath);

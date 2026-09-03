@@ -26,6 +26,29 @@ bytelight build Blink.class --target atmega328p
 
 → `build/Blink.hex` — **332 bytes** of AVR machine code, ready to flash.
 
+### Entry points
+
+Two styles of entry are supported:
+
+- **`static void main()`** — the default. Called once from the reset vector, so it is expected to drive any repeated work itself (e.g. the `while (true)` loop above).
+- **`static void setup()` / `static void loop()`** — the Arduino style. If the entry class has no `main()`, ByteLight synthesizes a `ClassName_main` wrapper that calls `setup()` once and then calls `loop()` in an endless loop. A real `main()` always wins over `setup()`/`loop()`.
+
+```java
+class Blink {
+    static void setup() {
+        GPIO.pinMode(13, GPIO.OUTPUT);
+    }
+    static void loop() {
+        GPIO.digitalWrite(13, GPIO.HIGH);
+        Delay.ms(500);
+        GPIO.digitalWrite(13, GPIO.LOW);
+        Delay.ms(500);
+    }
+}
+```
+
+Either `setup()` or `loop()` may be omitted — a `loop()`-only sketch runs `loop()` forever with no setup, and a `setup()`-only sketch calls `setup()` once and then halts.
+
 ## Supported languages
 
 ByteLight compiles JVM **bytecode**, not source, so any language that targets the JVM can in
@@ -74,6 +97,7 @@ Java / Kotlin / Scala / Clojure source
 - **Escape analysis** — non-escaping objects stack-allocated (`alloca`); static objects become LLVM globals; heap-escaping allocations produce a compile-time error.
 - **Compile-time GPIO inlining** — `GPIO.digitalWrite(13, HIGH)` with a constant pin number compiles to a single AVR `sbi` instruction.
 - **Serial (USART0)** — `Serial.begin()`, `Serial.print()`, `Serial.println()` backed by a busy-wait AVR runtime; compile-time constant baud rates are inlined as four MMIO stores.
+- **Arduino-style setup/loop** — entry classes without a `main()` can define `static void setup()` / `static void loop()`; ByteLight synthesizes the `main()` wrapper automatically.
 - **Approval-style test suite** — golden `.ll` and `.hex` files catch regressions across all phases.
 
 ## Completed phases
