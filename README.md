@@ -1,8 +1,8 @@
 # ByteLight
 
-Write Java. Flash machine code.
+Write JVM code. Flash machine code.
 
-Compiles JVM bytecode produced by standard `javac` into native code for microcontrollers — no JVM, no interpreter, no managed runtime on the MCU.
+Compiles JVM bytecode (`.class` / `.jar`) into native code for microcontrollers — no JVM, no interpreter, no managed runtime on the MCU.
 
 Initial target: **ATmega328P** (Arduino Uno, 16 MHz, 32 KB flash).
 
@@ -26,12 +26,26 @@ bytelight build Blink.class --target atmega328p
 
 → `build/Blink.hex` — **332 bytes** of AVR machine code, ready to flash.
 
+## Supported languages
+
+ByteLight compiles JVM **bytecode**, not source, so any language that targets the JVM can in
+principle feed it — as long as the code stays within ByteLight's constraints (no heap/GC, no
+exceptions, no `invokedynamic`). In practice that means idiomatic Kotlin/Scala/Clojure will
+largely fall outside the supported subset today; Java remains the primary, fully-tested path.
+
+| Language | Compiler | Status |
+|----------|----------|--------|
+| Java | `javac` | Primary — all examples and tests |
+| Kotlin | `kotlinc` | Supported (emits standard `.class` files) |
+| Scala | `scalac` | Possible, but the heavy stdlib tends to exceed MCU flash |
+| Clojure | `clojure` | Partial — needs `invokedynamic`-free codegen |
+
 ## Architecture
 
 ```
-Java source
+Java / Kotlin / Scala / Clojure source
     │
-    ▼ javac
+    ▼ javac / kotlinc / scalac / …
 .class / .jar
     │
     ▼ TeaVM (frontend)
@@ -165,7 +179,7 @@ Serial.println();        // CR+LF
 
 ## Memory model
 
-| Allocation | Java pattern | LLVM | Status |
+| Allocation | Pattern | LLVM | Status |
 |---|---|---|---|
 | Stack | `Counter c = new Counter()` (local, non-escaping) | `alloca %Counter_t` | ✓ |
 | Static | `static Counter c = new Counter()` | `global %Counter_t zeroinitializer` | ✓ |
