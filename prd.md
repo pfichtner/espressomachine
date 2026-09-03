@@ -1,7 +1,7 @@
-ByteLight — Revised PRD
+EspressoMachine — Revised PRD
 1. Vision
 
-ByteLight compiles JVM bytecode produced by Java (and potentially other JVM languages) into native code for microcontrollers, initially the ATmega328P, with no JVM, interpreter, JIT, or managed runtime required on the MCU.
+EspressoMachine compiles JVM bytecode produced by Java (and potentially other JVM languages) into native code for microcontrollers, initially the ATmega328P, with no JVM, interpreter, JIT, or managed runtime required on the MCU.
 
 The preferred architecture is:
 
@@ -26,7 +26,7 @@ javac
 └────────────┬────────────┘
              │
              ▼
-      ByteLight backend
+      EspressoMachine backend
              │
              ▼
          LLVM IR
@@ -44,7 +44,7 @@ The project should not duplicate functionality already provided by TeaVM unless 
 
 2. First objective: feasibility, not a compiler
 
-Before implementing ByteLight itself, build a TeaVM backend feasibility prototype.
+Before implementing EspressoMachine itself, build a TeaVM backend feasibility prototype.
 
 The first milestone is not Blink.
 
@@ -52,7 +52,7 @@ It is:
 
 Can we take TeaVM's optimized IR for a trivial Java program and translate it into valid LLVM IR?
 
-If yes, TeaVM becomes the foundation of ByteLight.
+If yes, TeaVM becomes the foundation of EspressoMachine.
 
 3. Why TeaVM
 
@@ -69,7 +69,7 @@ devirtualization
 Java type information
 object model where useful
 
-ByteLight should concentrate on:
+EspressoMachine should concentrate on:
 
 embedded restrictions
 MCU-specific runtime
@@ -78,7 +78,7 @@ LLVM IR generation
 MCU target integration
 4. Architectural principle
 
-TeaVM is the frontend. ByteLight is the embedded backend/profile.
+TeaVM is the frontend. EspressoMachine is the embedded backend/profile.
 
 Do not fork or duplicate TeaVM functionality prematurely.
 
@@ -95,7 +95,7 @@ Conceptually:
                          │
                          ▼
                  ┌──────────────┐
-                 │   ByteLight   │
+                 │   EspressoMachine   │
                  │              │
                  │ AVR backend  │
                  │ memory model │
@@ -227,7 +227,7 @@ define void @Counter_increment(ptr %this) {
 
 Exact representation should follow what works best with TeaVM's IR rather than being predetermined.
 
-8. Phase 3 — ByteLight memory model
+8. Phase 3 — EspressoMachine memory model
 
 This is where we intentionally diverge from a normal JVM.
 
@@ -345,7 +345,7 @@ TeaVM
    ↓
 optimized TeaVM IR
    ↓
-ByteLight LLVM backend
+EspressoMachine LLVM backend
    ↓
 LLVM IR
    ↓
@@ -394,7 +394,7 @@ class Blink {
     }
 }
 
-This is the real ByteLight v0.1 acceptance test.
+This is the real EspressoMachine v0.1 acceptance test.
 
 It proves:
 
@@ -415,7 +415,7 @@ physical execution
 
 Eventually:
 
-bytelight build Blink.class --target atmega328p
+espressomachine build Blink.class --target atmega328p
 
 Output:
 
@@ -426,9 +426,9 @@ build/
 
 Optional:
 
-bytelight inspect Blink.class
-bytelight emit-llvm Blink.class
-bytelight flash build/Blink.hex --port /dev/ttyUSB0
+espressomachine inspect Blink.class
+espressomachine emit-llvm Blink.class
+espressomachine flash build/Blink.hex --port /dev/ttyUSB0
 
 The compiler should also accept a .jar eventually.
 
@@ -444,7 +444,7 @@ Java API
    ↓
 TeaVM intrinsic
    ↓
-ByteLight backend
+EspressoMachine backend
    ↓
 AVR operation
 
@@ -481,7 +481,7 @@ javac
  ↓
 TeaVM
  ↓
-ByteLight
+EspressoMachine
  ↓
 LLVM
  ↓
@@ -521,7 +521,7 @@ This prevents us from spending months implementing functionality TeaVM already h
 
 I'd actually rename the initial experimental project:
 
-bytelight/
+espressomachine/
 ├── teavm-backend/
 │   └── llvm/
 │
@@ -543,7 +543,7 @@ Don't fork all of TeaVM into the repository unless necessary. Prefer depending o
 
 I'd give the agent only this task initially:
 
-Investigate the current TeaVM source and implement a minimal experimental backend/tool that receives TeaVM's optimized IR and dumps its structure. Do not implement AVR, LLVM, GPIO, or the ByteLight runtime yet.
+Investigate the current TeaVM source and implement a minimal experimental backend/tool that receives TeaVM's optimized IR and dumps its structure. Do not implement AVR, LLVM, GPIO, or the EspressoMachine runtime yet.
 
 Demonstrate that the following Java program can be compiled with javac, processed by TeaVM, and its resulting IR inspected:
 

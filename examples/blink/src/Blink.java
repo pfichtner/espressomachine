@@ -1,4 +1,4 @@
-import bytelight.api.*;
+import espressomachine.api.*;
 
 class Blink {
     static void main() {

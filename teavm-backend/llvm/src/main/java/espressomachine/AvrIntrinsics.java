@@ -1,4 +1,4 @@
-package bytelight;
+package espressomachine;
 
 import java.util.List;
 import java.util.Map;
@@ -14,7 +14,7 @@ import org.teavm.model.instructions.InvokeInstruction;
  * When the backend encounters a call to GPIO.* or Delay.*, it delegates to this
  * class which either:
  *   a) Inlines the AVR memory-mapped I/O directly (when pin is a compile-time constant),
- *   b) Falls back to an external runtime declaration (@__bytelight_gpio_*).
+ *   b) Falls back to an external runtime declaration (@__espressomachine_gpio_*).
  *
  * ATmega328P register map (memory-mapped addresses):
  *   DDRB  = 0x24  (Data Direction Register B — controls input/output)
@@ -31,9 +31,9 @@ import org.teavm.model.instructions.InvokeInstruction;
  */
 class AvrIntrinsics {
 
-    static final String GPIO_CLASS   = "bytelight.api.GPIO";
-    static final String DELAY_CLASS  = "bytelight.api.Delay";
-    static final String SERIAL_CLASS = "bytelight.api.Serial";
+    static final String GPIO_CLASS   = "espressomachine.api.GPIO";
+    static final String DELAY_CLASS  = "espressomachine.api.Delay";
+    static final String SERIAL_CLASS = "espressomachine.api.Serial";
 
     // ---- ATmega328P pin table ----
     // Index = Arduino pin number; value = {DDR addr, PORT addr, bit mask}
@@ -154,7 +154,7 @@ class AvrIntrinsics {
             }
         }
         // Fallback: runtime call
-        out.append("  call void @__bytelight_gpio_pinmode(i32 ")
+        out.append("  call void @__espressomachine_gpio_pinmode(i32 ")
            .append(resolveVar.apply(args.get(0))).append(", i32 ")
            .append(resolveVar.apply(args.get(1))).append(")\n");
         return tc;
@@ -193,7 +193,7 @@ class AvrIntrinsics {
                 return tc;
             }
         }
-        out.append("  call void @__bytelight_gpio_digitalwrite(i32 ")
+        out.append("  call void @__espressomachine_gpio_digitalwrite(i32 ")
            .append(resolveVar.apply(args.get(0))).append(", i32 ")
            .append(resolveVar.apply(args.get(1))).append(")\n");
         return tc;
@@ -206,7 +206,7 @@ class AvrIntrinsics {
     private static int emitDelayMs(StringBuilder out, List<? extends Variable> args,
                                    int tc,
                                    Function<Variable, String> resolveVar) {
-        out.append("  call void @__bytelight_delay_ms(i32 ")
+        out.append("  call void @__espressomachine_delay_ms(i32 ")
            .append(resolveVar.apply(args.get(0))).append(")\n");
         return tc;
     }
@@ -216,9 +216,9 @@ class AvrIntrinsics {
     // ------------------------------------------------------------------
     //
     // Statically computes the millisecond equivalent and lowers straight to
-    // __bytelight_delay_ms when the TimeUnit argument is a compile-time enum
-    // constant (e.g. Delay.time(1, TimeUnit.SECONDS) → __bytelight_delay_ms(1000)).
-    // Non-constant units fall back to a runtime __bytelight_delay_time call.
+    // __espressomachine_delay_ms when the TimeUnit argument is a compile-time enum
+    // constant (e.g. Delay.time(1, TimeUnit.SECONDS) → __espressomachine_delay_ms(1000)).
+    // Non-constant units fall back to a runtime __espressomachine_delay_time call.
 
     private static int emitDelayTime(StringBuilder out, List<? extends Variable> args,
                                      Map<Integer, String> constVars,
@@ -243,7 +243,7 @@ class AvrIntrinsics {
 
         if (unitGlobal == null) {
             // Unknown (non-constant) unit — generic runtime fallback.
-            out.append("  call void @__bytelight_delay_time(i32 ")
+            out.append("  call void @__espressomachine_delay_time(i32 ")
                .append(resolveVar.apply(args.get(0))).append(", i32 ")
                .append(resolveVar.apply(args.get(1))).append(")\n");
             return tc;
@@ -253,7 +253,7 @@ class AvrIntrinsics {
         if (amount != null) {
             // Constant amount + constant unit → statically calculated millis.
             long millis = (denominator != null) ? amount / denominator : amount * multiplier;
-            out.append("  call void @__bytelight_delay_ms(i32 ").append(millis).append(")\n");
+            out.append("  call void @__espressomachine_delay_ms(i32 ").append(millis).append(")\n");
             return tc;
         }
 
@@ -272,7 +272,7 @@ class AvrIntrinsics {
                .append(" = mul i32 ").append(tmp).append(", ").append(multiplier).append("\n");
             tmp = tmp2;
         }
-        out.append("  call void @__bytelight_delay_ms(i32 ").append(tmp).append(")\n");
+        out.append("  call void @__espressomachine_delay_ms(i32 ").append(tmp).append(")\n");
         return tc;
     }
 
@@ -295,7 +295,7 @@ class AvrIntrinsics {
             out.append("  store volatile i8 24, ptr inttoptr (i16 193 to ptr)\n"); // UCSR0B = RXEN|TXEN
             out.append("  store volatile i8 6,  ptr inttoptr (i16 194 to ptr)\n"); // UCSR0C = 8N1
         } else {
-            out.append("  call void @__bytelight_serial_begin(i32 ")
+            out.append("  call void @__espressomachine_serial_begin(i32 ")
                .append(resolveVar.apply(args.get(0))).append(")\n");
         }
         return tc;
@@ -303,7 +303,7 @@ class AvrIntrinsics {
 
     private static int emitSerialWrite(StringBuilder out, List<? extends Variable> args,
                                        int tc, Function<Variable, String> resolveVar) {
-        out.append("  call void @__bytelight_serial_write(i32 ")
+        out.append("  call void @__espressomachine_serial_write(i32 ")
            .append(resolveVar.apply(args.get(0))).append(")\n");
         return tc;
     }
@@ -350,13 +350,13 @@ class AvrIntrinsics {
                                          Function<Variable, String> resolveVar) {
         if (args.isEmpty()) {
             // println() → CR + LF
-            out.append("  call void @__bytelight_serial_write(i32 13)\n");
-            out.append("  call void @__bytelight_serial_write(i32 10)\n");
+            out.append("  call void @__espressomachine_serial_write(i32 13)\n");
+            out.append("  call void @__espressomachine_serial_write(i32 10)\n");
             return tc;
         }
         tc = emitSerialPrint(out, args, insn, objectRefs, tc, resolveVar);
-        out.append("  call void @__bytelight_serial_write(i32 13)\n");
-        out.append("  call void @__bytelight_serial_write(i32 10)\n");
+        out.append("  call void @__espressomachine_serial_write(i32 13)\n");
+        out.append("  call void @__espressomachine_serial_write(i32 10)\n");
         return tc;
     }
 
@@ -376,13 +376,13 @@ class AvrIntrinsics {
             // String: prefer a string-literal global, else the raw ptr.
             String global = objectRefs.get(arg.getIndex());
             String target = (global != null) ? global : resolveVar.apply(arg);
-            out.append("  call void @__bytelight_serial_print_str(ptr ")
+            out.append("  call void @__espressomachine_serial_print_str(ptr ")
                .append(target).append(")\n");
             return tc;
         }
 
         // Numeric (int or char) — transmit the decimal representation.
-        out.append("  call void @__bytelight_serial_print_int(i32 ")
+        out.append("  call void @__espressomachine_serial_print_int(i32 ")
            .append(resolveVar.apply(arg)).append(")\n");
         return tc;
     }
@@ -396,7 +396,7 @@ class AvrIntrinsics {
                                     Function<Variable, String> resolveVar) {
         String fqn = insn.getMethod().getClassName();
         String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
-        out.append("  call void @__bytelight_")
+        out.append("  call void @__espressomachine_")
            .append(simpleName.toLowerCase()).append("_")
            .append(insn.getMethod().getName()).append("(");
         for (int i = 0; i < args.size(); i++) {
@@ -430,18 +430,18 @@ class AvrIntrinsics {
      */
     static String runtimeDeclarations() {
         return """
-                declare void @__bytelight_gpio_pinmode(i32 %pin, i32 %mode)
-                declare void @__bytelight_gpio_digitalwrite(i32 %pin, i32 %value)
-                declare void @__bytelight_delay_ms(i32 %ms)
+                declare void @__espressomachine_gpio_pinmode(i32 %pin, i32 %mode)
+                declare void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value)
+                declare void @__espressomachine_delay_ms(i32 %ms)
                 """;
     }
 
     static String serialDeclarations() {
         return """
-                declare void @__bytelight_serial_begin(i32 %baud)
-                declare void @__bytelight_serial_write(i32 %b)
-                declare void @__bytelight_serial_print_int(i32 %n)
-                declare void @__bytelight_serial_print_str(ptr %s)
+                declare void @__espressomachine_serial_begin(i32 %baud)
+                declare void @__espressomachine_serial_write(i32 %b)
+                declare void @__espressomachine_serial_print_int(i32 %n)
+                declare void @__espressomachine_serial_print_str(ptr %s)
                 """;
     }
 }

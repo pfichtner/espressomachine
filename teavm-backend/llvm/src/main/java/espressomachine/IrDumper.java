@@ -1,4 +1,4 @@
-package bytelight;
+package espressomachine;
 
 import static java.io.OutputStream.nullOutputStream;
 import static java.nio.file.Files.writeString;
@@ -98,7 +98,7 @@ public class IrDumper {
         String entryClass   = args[1];
         String llvmOutputPath = args.length >= 3 ? args[2] : null;
 
-        System.out.println("=== ByteLight Phase 0/1: TeaVM IR Dump ===");
+        System.out.println("=== EspressoMachine Phase 0/1: TeaVM IR Dump ===");
         System.out.println("Classpath: " + classpathStr);
         System.out.println("Entry class: " + entryClass);
         if (llvmOutputPath != null) System.out.println("LLVM output: " + llvmOutputPath);
@@ -364,7 +364,7 @@ public class IrDumper {
 
         @Override
         public String[] getPlatformTags() {
-            return new String[]{"bytelight"};
+            return new String[]{"espressomachine"};
         }
 
         @Override

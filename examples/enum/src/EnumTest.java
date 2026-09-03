@@ -1,4 +1,4 @@
-// ByteLight enum support test.
+// EspressoMachine enum support test.
 //
 // Supported today:
 //   - ordinal() access (reads the i32 ordinal field)

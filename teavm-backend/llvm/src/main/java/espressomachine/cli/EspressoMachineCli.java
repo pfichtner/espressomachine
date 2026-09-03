@@ -1,4 +1,4 @@
-package bytelight.cli;
+package espressomachine.cli;
 
 import java.io.File;
 import java.io.IOException;
@@ -9,23 +9,23 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-import bytelight.IrDumper;
+import espressomachine.IrDumper;
 
 /**
- * ByteLight CLI entry point.
+ * EspressoMachine CLI entry point.
  *
  * Subcommands:
- *   bytelight build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]
- *   bytelight inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]
- *   bytelight emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]
- *   bytelight flash     --port <dev>                                    <Foo.hex>
+ *   espressomachine build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]
+ *   espressomachine inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]
+ *   espressomachine emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]
+ *   espressomachine flash     --port <dev>                                    <Foo.hex>
  *
  * Input resolution:
  *   Foo.class          → classpath = parent dir, entry class = "Foo"
  *   dir/ Foo           → classpath = dir/, entry class = "Foo"
  *   dir1:dir2 Foo      → classpath = "dir1:dir2", entry class = "Foo"
  */
-public class ByteLightCli {
+public class EspressoMachineCli {
 
     public static void main(String[] args) throws Exception {
         // Backward-compatible: if no subcommand detected, delegate to IrDumper.
@@ -59,9 +59,9 @@ public class ByteLightCli {
         Path outputDir = Paths.get(o.outputDir != null ? o.outputDir : "build");
 
         String target = o.target != null ? o.target : "atmega328p";
-        Path bytelightHome = findHome();
+        Path espressomachineHome = findHome();
 
-        System.out.println("=== ByteLight build ===");
+        System.out.println("=== EspressoMachine build ===");
         System.out.println("Entry:  " + o.entryClass);
         System.out.println("Target: " + target);
         System.out.println("Output: " + outputDir.toAbsolutePath());
@@ -74,7 +74,7 @@ public class ByteLightCli {
         IrDumper.compile(o.classpath, o.entryClass, llFile.toString(), false);
 
         // Steps 2-6: LLVM IR → ELF → HEX
-        new Pipeline(bytelightHome, target, outputDir)
+        new Pipeline(espressomachineHome, target, outputDir)
                 .compileToAvr(llFile, o.entryClass);
     }
 
@@ -188,7 +188,7 @@ public class ByteLightCli {
                     entryClass = positionals.get(1);
                 }
                 if (entryClass == null) {
-                    die("Missing entry class name. Usage: bytelight <cmd> <dir> <ClassName>");
+                    die("Missing entry class name. Usage: espressomachine <cmd> <dir> <ClassName>");
                 }
             }
         }
@@ -210,14 +210,14 @@ public class ByteLightCli {
     static Path findHome() {
         try {
             // Resolve TINYJAVA_HOME from the location of this JAR.
-            // JAR lives at: $TINYJAVA_HOME/teavm-backend/llvm/target/bytelight.jar
+            // JAR lives at: $TINYJAVA_HOME/teavm-backend/llvm/target/espressomachine.jar
             Path jarPath = Paths.get(
-                    ByteLightCli.class.getProtectionDomain()
+                    EspressoMachineCli.class.getProtectionDomain()
                             .getCodeSource().getLocation().toURI());
             return jarPath.getParent()   // target/
                           .getParent()   // llvm/
                           .getParent()   // teavm-backend/
-                          .getParent();  // bytelight/
+                          .getParent();  // espressomachine/
         } catch (URISyntaxException e) {
             throw new RuntimeException("Cannot resolve TINYJAVA_HOME", e);
         }
@@ -233,10 +233,10 @@ public class ByteLightCli {
         System.err.println("Error: " + msg);
         System.err.println();
         System.err.println("Usage:");
-        System.err.println("  bytelight build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]");
-        System.err.println("  bytelight inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]");
-        System.err.println("  bytelight emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]");
-        System.err.println("  bytelight flash     --port <dev>                                    <Foo.hex>");
+        System.err.println("  espressomachine build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]");
+        System.err.println("  espressomachine inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]");
+        System.err.println("  espressomachine emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]");
+        System.err.println("  espressomachine flash     --port <dev>                                    <Foo.hex>");
         System.exit(1);
         throw new RuntimeException("unreachable");
     }

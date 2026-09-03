@@ -1,13 +1,13 @@
-; ByteLight Phase 2 LLVM IR
+; EspressoMachine Phase 2 LLVM IR
 ; Generated from TeaVM 0.12.0 optimized IR
 
 %Counter_t = type { i32 }
 
 @MemoryTest_counter = global %Counter_t zeroinitializer
 
-declare void @__bytelight_gpio_pinmode(i32 %pin, i32 %mode)
-declare void @__bytelight_gpio_digitalwrite(i32 %pin, i32 %value)
-declare void @__bytelight_delay_ms(i32 %ms)
+declare void @__espressomachine_gpio_pinmode(i32 %pin, i32 %mode)
+declare void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value)
+declare void @__espressomachine_delay_ms(i32 %ms)
 
 
 define void @MemoryTest__init_(ptr %v0) {
