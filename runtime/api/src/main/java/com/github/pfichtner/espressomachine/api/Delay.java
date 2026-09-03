@@ -1,4 +1,4 @@
-package espressomachine.api;
+package com.github.pfichtner.espressomachine.api;
 
 import java.util.concurrent.TimeUnit;
 

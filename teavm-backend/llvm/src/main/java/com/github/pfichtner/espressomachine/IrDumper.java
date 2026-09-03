@@ -1,4 +1,4 @@
-package espressomachine;
+package com.github.pfichtner.espressomachine;
 
 import static java.io.OutputStream.nullOutputStream;
 import static java.nio.file.Files.writeString;
@@ -364,7 +364,7 @@ public class IrDumper {
 
         @Override
         public String[] getPlatformTags() {
-            return new String[]{"espressomachine"};
+            return new String[]{"com.github.pfichtner.espressomachine"};
         }
 
         @Override

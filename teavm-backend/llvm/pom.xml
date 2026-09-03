@@ -40,7 +40,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>espressomachine.cli.EspressoMachineCli</mainClass>
+                            <mainClass>com.github.pfichtner.espressomachine.cli.EspressoMachineCli</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -57,7 +57,7 @@
                             <shadedArtifactAttached>false</shadedArtifactAttached>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>espressomachine.cli.EspressoMachineCli</mainClass>
+                                    <mainClass>com.github.pfichtner.espressomachine.cli.EspressoMachineCli</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>

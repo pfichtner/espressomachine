@@ -1,4 +1,4 @@
-import espressomachine.api.*;
+import com.github.pfichtner.espressomachine.api.*;
 
 class Led {
     int pin;

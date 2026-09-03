@@ -1,4 +1,4 @@
-package espressomachine.cli;
+package com.github.pfichtner.espressomachine.cli;
 
 import java.io.File;
 import java.io.IOException;
@@ -9,16 +9,16 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-import espressomachine.IrDumper;
+import com.github.pfichtner.espressomachine.IrDumper;
 
 /**
  * EspressoMachine CLI entry point.
  *
  * Subcommands:
- *   espressomachine build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]
- *   espressomachine inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]
- *   espressomachine emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]
- *   espressomachine flash     --port <dev>                                    <Foo.hex>
+ *   com.github.pfichtner.espressomachine build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]
+ *   com.github.pfichtner.espressomachine inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]
+ *   com.github.pfichtner.espressomachine emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]
+ *   com.github.pfichtner.espressomachine flash     --port <dev>                                    <Foo.hex>
  *
  * Input resolution:
  *   Foo.class          → classpath = parent dir, entry class = "Foo"
@@ -188,7 +188,7 @@ public class EspressoMachineCli {
                     entryClass = positionals.get(1);
                 }
                 if (entryClass == null) {
-                    die("Missing entry class name. Usage: espressomachine <cmd> <dir> <ClassName>");
+                    die("Missing entry class name. Usage: com.github.pfichtner.espressomachine <cmd> <dir> <ClassName>");
                 }
             }
         }
@@ -210,14 +210,14 @@ public class EspressoMachineCli {
     static Path findHome() {
         try {
             // Resolve TINYJAVA_HOME from the location of this JAR.
-            // JAR lives at: $TINYJAVA_HOME/teavm-backend/llvm/target/espressomachine.jar
+            // JAR lives at: $TINYJAVA_HOME/teavm-backend/llvm/target/com.github.pfichtner.espressomachine.jar
             Path jarPath = Paths.get(
                     EspressoMachineCli.class.getProtectionDomain()
                             .getCodeSource().getLocation().toURI());
             return jarPath.getParent()   // target/
                           .getParent()   // llvm/
                           .getParent()   // teavm-backend/
-                          .getParent();  // espressomachine/
+                          .getParent();  // com.github.pfichtner.espressomachine/
         } catch (URISyntaxException e) {
             throw new RuntimeException("Cannot resolve TINYJAVA_HOME", e);
         }
@@ -233,10 +233,10 @@ public class EspressoMachineCli {
         System.err.println("Error: " + msg);
         System.err.println();
         System.err.println("Usage:");
-        System.err.println("  espressomachine build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]");
-        System.err.println("  espressomachine inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]");
-        System.err.println("  espressomachine emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]");
-        System.err.println("  espressomachine flash     --port <dev>                                    <Foo.hex>");
+        System.err.println("  com.github.pfichtner.espressomachine build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]");
+        System.err.println("  com.github.pfichtner.espressomachine inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]");
+        System.err.println("  com.github.pfichtner.espressomachine emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]");
+        System.err.println("  com.github.pfichtner.espressomachine flash     --port <dev>                                    <Foo.hex>");
         System.exit(1);
         throw new RuntimeException("unreachable");
     }

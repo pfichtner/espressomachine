@@ -1,4 +1,4 @@
-package espressomachine.cli;
+package com.github.pfichtner.espressomachine.cli;
 
 import java.io.IOException;
 import java.nio.file.Files;
