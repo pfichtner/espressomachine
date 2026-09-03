@@ -2,6 +2,8 @@
 
 Write JVM code. Flash machine code.
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 Compiles JVM bytecode (`.class` / `.jar`) into native code for microcontrollers — no JVM, no interpreter, no managed runtime on the MCU.
 
 Initial target: **ATmega328P** (Arduino Uno, 16 MHz, 32 KB flash).
