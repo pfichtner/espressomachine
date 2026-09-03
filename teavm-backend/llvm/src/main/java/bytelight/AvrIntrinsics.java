@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.teavm.model.ValueType;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.InvokeInstruction;
 
@@ -110,6 +111,8 @@ class AvrIntrinsics {
                 case "write"     -> emitSerialWrite(out, args, tmpCounter, resolveVar);
                 case "available" -> emitSerialAvailable(out, insn, tmpCounter, resolveVar);
                 case "read"      -> emitSerialRead(out, insn, tmpCounter, resolveVar);
+                case "print"     -> emitSerialPrint(out, args, insn, objectRefs, tmpCounter, resolveVar);
+                case "println"   -> emitSerialPrintln(out, args, insn, objectRefs, tmpCounter, resolveVar);
                 default          -> emitFallback(out, insn, args, tmpCounter, resolveVar);
             };
         }
@@ -334,6 +337,57 @@ class AvrIntrinsics {
     }
 
     // ------------------------------------------------------------------
+    // Serial.print / Serial.println (String / char / int overloads)
+    // ------------------------------------------------------------------
+    //
+    // TeaVM inlines print(char) and println(char)/println() into write() calls,
+    // so the backend only needs to handle the String and int overloads that survive
+    // optimisation, plus whatever residual calls remain.
+
+    private static int emitSerialPrintln(StringBuilder out, List<? extends Variable> args,
+                                         InvokeInstruction insn,
+                                         Map<Integer, String> objectRefs, int tc,
+                                         Function<Variable, String> resolveVar) {
+        if (args.isEmpty()) {
+            // println() → CR + LF
+            out.append("  call void @__bytelight_serial_write(i32 13)\n");
+            out.append("  call void @__bytelight_serial_write(i32 10)\n");
+            return tc;
+        }
+        tc = emitSerialPrint(out, args, insn, objectRefs, tc, resolveVar);
+        out.append("  call void @__bytelight_serial_write(i32 13)\n");
+        out.append("  call void @__bytelight_serial_write(i32 10)\n");
+        return tc;
+    }
+
+    private static int emitSerialPrint(StringBuilder out, List<? extends Variable> args,
+                                       InvokeInstruction insn,
+                                       Map<Integer, String> objectRefs, int tc,
+                                       Function<Variable, String> resolveVar) {
+        if (args.isEmpty()) return tc;
+        Variable arg = args.get(0);
+
+        // Distinguish by the declared parameter type: String (object) vs char/int.
+        ValueType ptype = insn.getMethod().getDescriptor().parameterType(0);
+        boolean isString = (ptype instanceof ValueType.Object)
+                && "java.lang.String".equals(((ValueType.Object) ptype).getClassName());
+
+        if (isString) {
+            // String: prefer a string-literal global, else the raw ptr.
+            String global = objectRefs.get(arg.getIndex());
+            String target = (global != null) ? global : resolveVar.apply(arg);
+            out.append("  call void @__bytelight_serial_print_str(ptr ")
+               .append(target).append(")\n");
+            return tc;
+        }
+
+        // Numeric (int or char) — transmit the decimal representation.
+        out.append("  call void @__bytelight_serial_print_int(i32 ")
+           .append(resolveVar.apply(arg)).append(")\n");
+        return tc;
+    }
+
+    // ------------------------------------------------------------------
     // Fallback: generic external call
     // ------------------------------------------------------------------
 
@@ -386,6 +440,8 @@ class AvrIntrinsics {
         return """
                 declare void @__bytelight_serial_begin(i32 %baud)
                 declare void @__bytelight_serial_write(i32 %b)
+                declare void @__bytelight_serial_print_int(i32 %n)
+                declare void @__bytelight_serial_print_str(ptr %s)
                 """;
     }
 }

@@ -632,9 +632,16 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     @Override
     public void visit(StringConstantInstruction insn) {
-        // String heap not supported on embedded targets.
-        // In enum <clinit> the string is the enum name — replaced with null ptr (ignored).
-        // Elsewhere, emit a diagnostic comment and null.
+        // In enum <clinit>, the string is the enum name and is discarded (null ptr).
+        // Elsewhere, register it as a global byte array and point the variable at it,
+        // enabling Serial.print(String)/println(String) to transmit the bytes.
+        if (!inEnumClinit && module != null) {
+            String global = module.internString(insn.getConstant());
+            staticObjectRef.put(insn.getReceiver().getIndex(), global);
+            out.append("  ").append(v(insn.getReceiver()))
+               .append(" = getelementptr i8, ptr ").append(global).append(", i32 0\n");
+            return;
+        }
         if (!inEnumClinit) {
             out.append("  ; ERROR: string constant \"").append(insn.getConstant())
                .append("\" — String heap not supported on embedded targets\n");

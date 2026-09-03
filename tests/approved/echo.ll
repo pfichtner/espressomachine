@@ -6,6 +6,8 @@ declare void @__bytelight_gpio_digitalwrite(i32 %pin, i32 %value)
 declare void @__bytelight_delay_ms(i32 %ms)
 declare void @__bytelight_serial_begin(i32 %baud)
 declare void @__bytelight_serial_write(i32 %b)
+declare void @__bytelight_serial_print_int(i32 %n)
+declare void @__bytelight_serial_print_str(ptr %s)
 
 define void @Echo__init_(ptr %v0) {
 BB0:
