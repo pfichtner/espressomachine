@@ -1,6 +1,7 @@
-import espressomachine.api.Delay;
-import espressomachine.api.GPIO;
 import java.util.concurrent.TimeUnit;
+
+import com.github.pfichtner.espressomachine.api.Delay;
+import com.github.pfichtner.espressomachine.api.GPIO;
 
 class DelayTime {
     static void main() {

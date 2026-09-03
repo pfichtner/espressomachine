@@ -1,4 +1,4 @@
-package espressomachine;
+package com.github.pfichtner.espressomachine;
 
 import java.util.ArrayList;
 import java.util.HashMap;

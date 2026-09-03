@@ -1,4 +1,4 @@
-package espressomachine.api;
+package com.github.pfichtner.espressomachine.api;
 
 /**
  * EspressoMachine Serial API for ATmega328P (USART0).

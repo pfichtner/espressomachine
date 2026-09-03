@@ -178,7 +178,7 @@ javac runtime/api/*.java MyProgram.java -d classes/
 ```
 
 ```java
-import espressomachine.api.*;
+import com.github.pfichtner.espressomachine.api.*;
 
 // GPIO.java — lowered to AVR MMIO by the backend
 GPIO.pinMode(13, GPIO.OUTPUT);

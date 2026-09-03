@@ -1,4 +1,4 @@
-package espressomachine;
+package com.github.pfichtner.espressomachine;
 
 import java.util.List;
 import java.util.Map;
@@ -31,9 +31,9 @@ import org.teavm.model.instructions.InvokeInstruction;
  */
 class AvrIntrinsics {
 
-    static final String GPIO_CLASS   = "espressomachine.api.GPIO";
-    static final String DELAY_CLASS  = "espressomachine.api.Delay";
-    static final String SERIAL_CLASS = "espressomachine.api.Serial";
+    static final String GPIO_CLASS   = "com.github.pfichtner.espressomachine.api.GPIO";
+    static final String DELAY_CLASS  = "com.github.pfichtner.espressomachine.api.Delay";
+    static final String SERIAL_CLASS = "com.github.pfichtner.espressomachine.api.Serial";
 
     // ---- ATmega328P pin table ----
     // Index = Arduino pin number; value = {DDR addr, PORT addr, bit mask}
