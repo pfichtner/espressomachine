@@ -209,8 +209,8 @@ public class EspressoMachineCli {
 
     static Path findHome() {
         try {
-            // Resolve TINYJAVA_HOME from the location of this JAR.
-            // JAR lives at: $TINYJAVA_HOME/teavm-backend/llvm/target/com.github.pfichtner.espressomachine.jar
+            // Resolve ESPRESSOMACHINE_HOME from the location of this JAR.
+            // JAR lives at: $ESPRESSOMACHINE_HOME/teavm-backend/llvm/target/com.github.pfichtner.espressomachine.jar
             Path jarPath = Paths.get(
                     EspressoMachineCli.class.getProtectionDomain()
                             .getCodeSource().getLocation().toURI());
@@ -219,7 +219,7 @@ public class EspressoMachineCli {
                           .getParent()   // teavm-backend/
                           .getParent();  // com.github.pfichtner.espressomachine/
         } catch (URISyntaxException e) {
-            throw new RuntimeException("Cannot resolve TINYJAVA_HOME", e);
+            throw new RuntimeException("Cannot resolve ESPRESSOMACHINE_HOME", e);
         }
     }
 
