@@ -48,6 +48,8 @@ ensure_examples_compiled() {
 }
 
 # compare actual vs approved file; print diff on mismatch.
+# Line endings are normalized (CRLF/CR -> LF) so the comparison is agnostic to
+# whether avr-objcopy or a checkout produced \r\n vs \n.
 check() {
     local name="$1" actual="$2" approved="$3"
     if $APPROVE; then
@@ -55,13 +57,13 @@ check() {
         echo "  APPROVED"
         return 0
     fi
-    if diff -u "$approved" "$actual" > /dev/null 2>&1; then
+    if diff -u <(tr -d '\r' < "$approved") <(tr -d '\r' < "$actual") > /dev/null 2>&1; then
         echo "  PASS"
         PASS=$((PASS + 1))
         return 0
     else
         echo "  FAIL"
-        diff -u "$approved" "$actual" | head -60
+        diff -u <(tr -d '\r' < "$approved") <(tr -d '\r' < "$actual") | head -60
         FAIL=$((FAIL + 1))
         return 1
     fi
