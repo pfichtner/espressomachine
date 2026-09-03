@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://pfichtner.github.io/assets/bytelight/bytelight.jpg" alt="ByteLight logo" width="400">
+</p>
+
 # ByteLight
 
 Write JVM code. Flash machine code.
