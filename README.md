@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="https://pfichtner.github.io/assets/bytelight/bytelight.jpg" alt="ByteLight logo" width="400">
-</p>
+<img align="left" src="https://pfichtner.github.io/assets/bytelight/bytelight.jpg" alt="ByteLight logo" width="120">
 
 # ByteLight
 
@@ -9,6 +7,8 @@ Write JVM code. Flash machine code.
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://adoptium.net)
 [![GitHub Stars](https://img.shields.io/github/stars/pfichtner/bytelight?style=social)](https://github.com/pfichtner/bytelight)
+
+<br clear="left">
 
 Compiles JVM bytecode (`.class` / `.jar`) into native code for microcontrollers — no JVM, no interpreter, no managed runtime on the MCU.
 
