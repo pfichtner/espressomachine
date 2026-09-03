@@ -1,4 +1,4 @@
-package bytelight;
+package espressomachine;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -97,7 +97,7 @@ class LlvmModuleEmitter {
 
     String emit() {
         StringBuilder out = new StringBuilder();
-        out.append("; ByteLight Phase 2 LLVM IR\n");
+        out.append("; EspressoMachine Phase 2 LLVM IR\n");
         out.append("; Generated from TeaVM 0.12.0 optimized IR\n\n");
 
         // 1. Struct type declarations
@@ -173,7 +173,7 @@ class LlvmModuleEmitter {
     // supported, but Serial.print(String)/println(String) lower to these globals.
     String internString(String literal) {
         return stringGlobals.computeIfAbsent(literal, lit -> {
-            return "@bytelight_string_" + stringGlobals.size();
+            return "@espressomachine_string_" + stringGlobals.size();
         });
     }
 

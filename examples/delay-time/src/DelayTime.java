@@ -1,5 +1,5 @@
-import bytelight.api.Delay;
-import bytelight.api.GPIO;
+import espressomachine.api.Delay;
+import espressomachine.api.GPIO;
 import java.util.concurrent.TimeUnit;
 
 class DelayTime {

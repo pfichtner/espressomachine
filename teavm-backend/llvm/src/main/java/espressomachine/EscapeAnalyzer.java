@@ -1,4 +1,4 @@
-package bytelight;
+package espressomachine;
 
 import java.util.HashMap;
 import java.util.HashSet;

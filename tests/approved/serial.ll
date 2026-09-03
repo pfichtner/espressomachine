@@ -1,13 +1,13 @@
-; ByteLight Phase 2 LLVM IR
+; EspressoMachine Phase 2 LLVM IR
 ; Generated from TeaVM 0.12.0 optimized IR
 
-declare void @__bytelight_gpio_pinmode(i32 %pin, i32 %mode)
-declare void @__bytelight_gpio_digitalwrite(i32 %pin, i32 %value)
-declare void @__bytelight_delay_ms(i32 %ms)
-declare void @__bytelight_serial_begin(i32 %baud)
-declare void @__bytelight_serial_write(i32 %b)
-declare void @__bytelight_serial_print_int(i32 %n)
-declare void @__bytelight_serial_print_str(ptr %s)
+declare void @__espressomachine_gpio_pinmode(i32 %pin, i32 %mode)
+declare void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value)
+declare void @__espressomachine_delay_ms(i32 %ms)
+declare void @__espressomachine_serial_begin(i32 %baud)
+declare void @__espressomachine_serial_write(i32 %b)
+declare void @__espressomachine_serial_print_int(i32 %n)
+declare void @__espressomachine_serial_print_str(ptr %s)
 
 define void @HelloSerial__init_(ptr %v0) {
 BB0:
@@ -28,19 +28,19 @@ BB1:
   br label %BB2
 BB2:
   %v2 = add i32 0, 65
-  call void @__bytelight_serial_write(i32 65)
+  call void @__espressomachine_serial_write(i32 65)
   %v5 = add i32 0, 13
-  call void @__bytelight_serial_write(i32 13)
+  call void @__espressomachine_serial_write(i32 13)
   %v6 = add i32 0, 10
-  call void @__bytelight_serial_write(i32 10)
-  %v3 = getelementptr i8, ptr @bytelight_string_0, i32 0
-  call void @__bytelight_serial_print_str(ptr @bytelight_string_0)
-  call void @__bytelight_serial_write(i32 13)
-  call void @__bytelight_serial_write(i32 10)
+  call void @__espressomachine_serial_write(i32 10)
+  %v3 = getelementptr i8, ptr @espressomachine_string_0, i32 0
+  call void @__espressomachine_serial_print_str(ptr @espressomachine_string_0)
+  call void @__espressomachine_serial_write(i32 13)
+  call void @__espressomachine_serial_write(i32 10)
   %v4 = add i32 0, 1000
-  call void @__bytelight_delay_ms(i32 1000)
+  call void @__espressomachine_delay_ms(i32 1000)
   br label %BB2
 }
 
-@bytelight_string_0 = private unnamed_addr constant [18 x i8] c"Hello, ByteLight!\00"
+@espressomachine_string_0 = private unnamed_addr constant [24 x i8] c"Hello, EspressoMachine!\00"
 

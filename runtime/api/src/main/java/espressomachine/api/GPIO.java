@@ -1,9 +1,9 @@
-package bytelight.api;
+package espressomachine.api;
 
 /**
- * ByteLight GPIO API for ATmega328P.
+ * EspressoMachine GPIO API for ATmega328P.
  *
- * Calls to these methods are recognized as intrinsics by the ByteLight backend
+ * Calls to these methods are recognized as intrinsics by the EspressoMachine backend
  * and lowered to AVR memory-mapped I/O operations — no Java runtime is emitted.
  *
  * Pin numbering follows Arduino conventions (digital pins 0–13).

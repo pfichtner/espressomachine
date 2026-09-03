@@ -1,5 +1,5 @@
 #!/bin/bash
-# ByteLight system integration test: verify Serial.available() and Serial.read()
+# EspressoMachine system integration test: verify Serial.available() and Serial.read()
 # by running the Echo example on virtualavr and checking that bytes sent to the
 # virtual USART are echoed back.
 #
@@ -34,7 +34,7 @@ BUILD_TIMEOUT="${BUILD_TIMEOUT:-180}"  # seconds to wait for device/WS readiness
 
 WS_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
 WS_URL="ws://localhost:$WS_PORT"
-CONTAINER="bytelight-echo-$$"
+CONTAINER="espressomachine-echo-$$"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -71,13 +71,13 @@ WORK_DIR=$(mktemp -d)
 
 if [[ -z "$HEX_FILE" ]]; then
     HEX_FILE="$WORK_DIR/Echo.hex"
-    echo "[1/6] Building Echo.hex via ByteLight..."
+    echo "[1/6] Building Echo.hex via EspressoMachine..."
     if ! command -v javac > /dev/null 2>&1 || ! command -v avr-ld > /dev/null 2>&1; then
         echo "    (AVR toolchain not installed; using approved hex tests/approved/echo.hex)"
         cp "$REPO_ROOT/tests/approved/echo.hex" "$HEX_FILE"
     else
         mvn compile -q -f "$REPO_ROOT/examples/pom.xml"
-        if (cd "$REPO_ROOT" && ./bin/bytelight build \
+        if (cd "$REPO_ROOT" && ./bin/espressomachine build \
             --cp "examples/echo/target/classes:runtime/api/target/classes" \
             Echo \
             --target atmega328p \

@@ -1,7 +1,7 @@
-package bytelight.api;
+package espressomachine.api;
 
 /**
- * ByteLight Serial API for ATmega328P (USART0).
+ * EspressoMachine Serial API for ATmega328P (USART0).
  *
  * Serial.begin() and Serial.write() are AVR intrinsics: the backend lowers them
  * to USART register stores / a busy-wait TX loop.  All other methods are
@@ -49,7 +49,7 @@ public class Serial {
     /**
      * Transmit a string.
      *
-     * Native so the backend emits {@code __bytelight_serial_print_str} directly;
+     * Native so the backend emits {@code __espressomachine_serial_print_str} directly;
      * Java String iteration (length()/charAt()) is not supported on the embedded
      * target. Only string literals are supported.
      */
@@ -58,7 +58,7 @@ public class Serial {
     /**
      * Transmit a string followed by CR+LF.
      *
-     * Native so the backend emits {@code __bytelight_serial_print_str} directly,
+     * Native so the backend emits {@code __espressomachine_serial_print_str} directly,
      * then CR+LF. Only string literals are supported.
      */
     public static native void println(String s);
