@@ -1,5 +1,5 @@
 #!/bin/bash
-# ByteLight system integration test: run the transpiled Java serial program on
+# EspressoMachine system integration test: run the transpiled Java serial program on
 # virtualavr and verify that 'A' is transmitted over the virtual USART by
 # reading from the PTY that virtualavr creates on the host.
 #
@@ -18,7 +18,7 @@
 #   - Docker with access to /dev (host /dev bind-mount)
 #   - websocat  (apt install websocat)
 #   - stty      (usually part of coreutils)
-#   - The ByteLight fat JAR built (teavm-backend/llvm/target/*.jar)
+#   - The EspressoMachine fat JAR built (teavm-backend/llvm/target/*.jar)
 #
 # Usage:
 #   ./tests/systemtest-serial.sh                      # build .hex then run on virtualavr
@@ -39,7 +39,7 @@ BUILD_TIMEOUT="${BUILD_TIMEOUT:-180}"  # seconds to wait for device/WS readiness
 
 WS_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
 WS_URL="ws://localhost:$WS_PORT"
-CONTAINER="bytelight-serial-$$"
+CONTAINER="espressomachine-serial-$$"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -76,13 +76,13 @@ WORK_DIR=$(mktemp -d)
 
 if [[ -z "$HEX_FILE" ]]; then
     HEX_FILE="$WORK_DIR/HelloSerial.hex"
-    echo "[1/6] Building HelloSerial.hex via ByteLight..."
+    echo "[1/6] Building HelloSerial.hex via EspressoMachine..."
     if ! command -v javac > /dev/null 2>&1 || ! command -v avr-ld > /dev/null 2>&1; then
         echo "    (AVR toolchain not installed; using approved hex tests/approved/serial.hex)"
         cp "$REPO_ROOT/tests/approved/serial.hex" "$HEX_FILE"
     else
         mvn compile -q -f "$REPO_ROOT/examples/pom.xml"
-        if (cd "$REPO_ROOT" && ./bin/bytelight build \
+        if (cd "$REPO_ROOT" && ./bin/espressomachine build \
             --cp "examples/serial/target/classes:runtime/api/target/classes" \
             HelloSerial \
             --target atmega328p \

@@ -1,4 +1,4 @@
-; ByteLight Phase 2 LLVM IR
+; EspressoMachine Phase 2 LLVM IR
 ; Generated from TeaVM 0.12.0 optimized IR
 
 %java_lang_Enum_t = type { ptr, i32 }
@@ -14,9 +14,9 @@
 @Pin_BUTTON = global %Pin_t zeroinitializer
 @Pin_$VALUES = global ptr null
 
-declare void @__bytelight_gpio_pinmode(i32 %pin, i32 %mode)
-declare void @__bytelight_gpio_digitalwrite(i32 %pin, i32 %value)
-declare void @__bytelight_delay_ms(i32 %ms)
+declare void @__espressomachine_gpio_pinmode(i32 %pin, i32 %mode)
+declare void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value)
+declare void @__espressomachine_delay_ms(i32 %ms)
 
 
 define void @EnumTest__init_(ptr %v0) {

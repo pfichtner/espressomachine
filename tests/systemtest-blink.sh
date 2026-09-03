@@ -1,5 +1,5 @@
 #!/bin/bash
-# ByteLight system integration test: run the transpiled Java blink program
+# EspressoMachine system integration test: run the transpiled Java blink program
 # on virtualavr (https://github.com/pfichtner/virtualavr) and verify the LED
 # (pin 13) actually blinks by watching pin-state messages over WebSocket.
 #
@@ -7,7 +7,7 @@
 #   - Docker
 #   - websocat  (apt install websocat)
 #   - jq        (pre-installed on most CI environments)
-#   - The ByteLight fat JAR built (teavm-backend/llvm/target/*.jar)
+#   - The EspressoMachine fat JAR built (teavm-backend/llvm/target/*.jar)
 #   - An AVR toolchain to build the .hex (unless one is supplied)
 #
 # Usage:
@@ -29,7 +29,7 @@ BUILD_TIMEOUT="${BUILD_TIMEOUT:-180}"        # seconds to wait for container rea
 
 WS_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
 WS_URL="ws://localhost:$WS_PORT"
-CONTAINER="bytelight-blink-$$"
+CONTAINER="espressomachine-blink-$$"
 
 # ---------------------------------------------------------------------------
 # Cleanup on exit
@@ -54,14 +54,14 @@ WORK_DIR=$(mktemp -d)
 
 if [[ -z "$HEX_FILE" ]]; then
     HEX_FILE="$WORK_DIR/Blink.hex"
-    echo "[1/5] Building Blink.hex via ByteLight..."
+    echo "[1/5] Building Blink.hex via EspressoMachine..."
     if ! command -v javac > /dev/null 2>&1 || ! command -v avr-ld > /dev/null 2>&1; then
         echo "    (AVR toolchain not installed; using approved hex tests/approved/blink.hex)"
         cp "$REPO_ROOT/tests/approved/blink.hex" "$HEX_FILE"
     else
         # Compile all examples (including runtime API stubs) via Maven
         mvn compile -q -f "$REPO_ROOT/examples/pom.xml"
-        if (cd "$REPO_ROOT" && ./bin/bytelight build \
+        if (cd "$REPO_ROOT" && ./bin/espressomachine build \
             --cp "examples/blink/target/classes:runtime/api/target/classes" \
             Blink \
             --target atmega328p \

@@ -1,12 +1,12 @@
-<img align="left" src="https://pfichtner.github.io/assets/bytelight/bytelight.jpg" alt="ByteLight logo" width="120">
+<img align="left" src="https://pfichtner.github.io/assets/espressomachine/espressomachine.jpg" alt="EspressoMachine logo" width="120">
 
-# ByteLight
+# EspressoMachine
 
 Write JVM code. Flash machine code.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://adoptium.net)
-[![GitHub Stars](https://img.shields.io/github/stars/pfichtner/bytelight?style=social)](https://github.com/pfichtner/bytelight)
+[![GitHub Stars](https://img.shields.io/github/stars/pfichtner/espressomachine?style=social)](https://github.com/pfichtner/espressomachine)
 
 <br clear="left">
 
@@ -29,7 +29,7 @@ class Blink {
 ```
 
 ```
-bytelight build Blink.class --target atmega328p
+espressomachine build Blink.class --target atmega328p
 ```
 
 → `build/Blink.hex` — **332 bytes** of AVR machine code, ready to flash.
@@ -39,7 +39,7 @@ bytelight build Blink.class --target atmega328p
 Two styles of entry are supported:
 
 - **`static void main()`** — the default. Called once from the reset vector, so it is expected to drive any repeated work itself (e.g. the `while (true)` loop above).
-- **`static void setup()` / `static void loop()`** — the Arduino style. If the entry class has no `main()`, ByteLight synthesizes a `ClassName_main` wrapper that calls `setup()` once and then calls `loop()` in an endless loop. A real `main()` always wins over `setup()`/`loop()`.
+- **`static void setup()` / `static void loop()`** — the Arduino style. If the entry class has no `main()`, EspressoMachine synthesizes a `ClassName_main` wrapper that calls `setup()` once and then calls `loop()` in an endless loop. A real `main()` always wins over `setup()`/`loop()`.
 
 ```java
 class Blink {
@@ -59,8 +59,8 @@ Either `setup()` or `loop()` may be omitted — a `loop()`-only sketch runs `loo
 
 ## Supported languages
 
-ByteLight compiles JVM **bytecode**, not source, so any language that targets the JVM can in
-principle feed it — as long as the code stays within ByteLight's constraints (no heap/GC, no
+EspressoMachine compiles JVM **bytecode**, not source, so any language that targets the JVM can in
+principle feed it — as long as the code stays within EspressoMachine's constraints (no heap/GC, no
 exceptions, no `invokedynamic`). In practice that means idiomatic Kotlin/Scala/Clojure will
 largely fall outside the supported subset today; Java remains the primary, fully-tested path.
 
@@ -85,7 +85,7 @@ Java / Kotlin / Scala / Clojure source
     │  · devirtualization
     │  · SSA optimisation
     │
-    ▼ ByteLight backend
+    ▼ EspressoMachine backend
     │  · LLVM IR generation
     │  · escape analysis (stack vs. static vs. heap error)
     │  · AVR intrinsic lowering (GPIO, Delay → MMIO)
@@ -97,7 +97,7 @@ Java / Kotlin / Scala / Clojure source
     ▼ ATmega328P .hex
 ```
 
-[TeaVM](https://teavm.org) handles the hard frontend work (class loading, points-to analysis, SSA construction, inlining). ByteLight is a pure backend/profile that targets embedded MCUs.
+[TeaVM](https://teavm.org) handles the hard frontend work (class loading, points-to analysis, SSA construction, inlining). EspressoMachine is a pure backend/profile that targets embedded MCUs.
 
 ## Features
 
@@ -105,7 +105,7 @@ Java / Kotlin / Scala / Clojure source
 - **Escape analysis** — non-escaping objects stack-allocated (`alloca`); static objects become LLVM globals; heap-escaping allocations produce a compile-time error.
 - **Compile-time GPIO inlining** — `GPIO.digitalWrite(13, HIGH)` with a constant pin number compiles to a single AVR `sbi` instruction.
 - **Serial (USART0)** — `Serial.begin()`, `Serial.print()`, `Serial.println()` backed by a busy-wait AVR runtime; compile-time constant baud rates are inlined as four MMIO stores.
-- **Arduino-style setup/loop** — entry classes without a `main()` can define `static void setup()` / `static void loop()`; ByteLight synthesizes the `main()` wrapper automatically.
+- **Arduino-style setup/loop** — entry classes without a `main()` can define `static void setup()` / `static void loop()`; EspressoMachine synthesizes the `main()` wrapper automatically.
 - **Approval-style test suite** — golden `.ll` and `.hex` files catch regressions across all steps.
 
 ## Requirements
@@ -116,7 +116,7 @@ Java / Kotlin / Scala / Clojure source
 | Maven | 3.8+ |
 | LLVM | 18 (`llc-18`, `llvm-as`) |
 | AVR binutils | `avr-as`, `avr-ld`, `avr-objcopy`, `avr-size` |
-| avrdude | for `bytelight flash` |
+| avrdude | for `espressomachine flash` |
 
 Install on Ubuntu/Debian:
 
@@ -134,23 +134,23 @@ cd teavm-backend/llvm && mvn package -q && cd ../..
 export PATH="$PWD/bin:$PATH"
 
 # Compile and inspect IR
-bytelight emit-llvm examples/blink/classes Blink -o Blink.ll
+espressomachine emit-llvm examples/blink/classes Blink -o Blink.ll
 
 # Full pipeline → HEX
-bytelight build examples/blink/classes Blink --target atmega328p
+espressomachine build examples/blink/classes Blink --target atmega328p
 avr-size build/Blink.elf
 
 # Flash (replace /dev/ttyUSB0 with your port)
-bytelight flash build/Blink.hex --port /dev/ttyUSB0
+espressomachine flash build/Blink.hex --port /dev/ttyUSB0
 ```
 
 ## CLI reference
 
 ```
-bytelight build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]
-bytelight inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]
-bytelight emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]
-bytelight flash     --port <dev>                                    <Foo.hex>
+espressomachine build     [--target <mcu>] [--cp <dirs>] [--output <dir>] <Foo.class|dir> [Name]
+espressomachine inspect   [--cp <dirs>]                                   <Foo.class|dir> [Name]
+espressomachine emit-llvm [--cp <dirs>] [-o <out.ll>]                    <Foo.class|dir> [Name]
+espressomachine flash     --port <dev>                                    <Foo.hex>
 ```
 
 Input forms:
@@ -162,7 +162,7 @@ Default output directory: `build/` relative to the working directory.
 
 ## API reference
 
-The API lives in package `bytelight.api`. Compile the stubs once, then reference them when compiling user code:
+The API lives in package `espressomachine.api`. Compile the stubs once, then reference them when compiling user code:
 
 ```bash
 javac runtime/api/*.java -d api-classes/
@@ -176,7 +176,7 @@ javac runtime/api/*.java MyProgram.java -d classes/
 ```
 
 ```java
-import bytelight.api.*;
+import espressomachine.api.*;
 
 // GPIO.java — lowered to AVR MMIO by the backend
 GPIO.pinMode(13, GPIO.OUTPUT);
@@ -215,15 +215,15 @@ Heap/GC is explicitly out of scope for the initial release.
    ```
 2. Provide `gpio.ll` and `delay.ll` (or symlink if registers are identical).
 3. Create `targets/<mcu>/startup.S`, `linker.ld`.
-4. Run: `bytelight build MyClass --target <mcu>`
+4. Run: `espressomachine build MyClass --target <mcu>`
 
 ## Project layout
 
 ```
-bin/bytelight                  CLI launcher
+bin/espressomachine                  CLI launcher
 teavm-backend/llvm/           Java compiler (Maven project)
-  src/main/java/bytelight/
-    cli/ByteLightCli.java      CLI entry point & subcommand dispatch
+  src/main/java/espressomachine/
+    cli/EspressoMachineCli.java      CLI entry point & subcommand dispatch
     cli/Pipeline.java         AVR toolchain orchestration
     IrDumper.java             TeaVM driver (also legacy entry point)
     LlvmModuleEmitter.java    LLVM IR module writer
@@ -316,7 +316,7 @@ Configuration via environment variables:
 | 5 | ATmega328P target — startup, linker, `avr-ld`, produces flashable HEX |
 | 6 | First Blink — `Blink.hex` 332 bytes, `sbi`/`cbi` verified by disassembly |
 | 7 | OOP Blink — `Led` class with constructor, fields, instance methods; 328 bytes |
-| CLI | `bytelight build / inspect / emit-llvm / flash` |
+| CLI | `espressomachine build / inspect / emit-llvm / flash` |
 
 ## Research notes
 

@@ -1,4 +1,4 @@
-package bytelight.cli;
+package espressomachine.cli;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -8,19 +8,19 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Orchestrates the ByteLight compilation pipeline from LLVM IR to a flashable HEX file.
+ * Orchestrates the EspressoMachine compilation pipeline from LLVM IR to a flashable HEX file.
  *
  * Step 1 (TeaVM → LLVM IR) is handled by IrDumper.compile() before this class is invoked.
  * Steps 2-6 here shell out to the AVR toolchain.
  */
 class Pipeline {
 
-    private final Path bytelightHome;
+    private final Path espressomachineHome;
     private final String target;   // e.g. "atmega328p"
     private final Path outputDir;
 
-    Pipeline(Path bytelightHome, String target, Path outputDir) {
-        this.bytelightHome = bytelightHome;
+    Pipeline(Path espressomachineHome, String target, Path outputDir) {
+        this.espressomachineHome = espressomachineHome;
         this.target = target;
         this.outputDir = outputDir;
     }
@@ -32,15 +32,15 @@ class Pipeline {
     void compileToAvr(Path inputLl, String entryClass) throws IOException, InterruptedException {
         Files.createDirectories(outputDir);
 
-        Path targetDir = bytelightHome.resolve("runtime/avr/" + target);
-        Path scriptsDir = bytelightHome.resolve("targets/" + target);
+        Path targetDir = espressomachineHome.resolve("runtime/avr/" + target);
+        Path scriptsDir = espressomachineHome.resolve("targets/" + target);
 
         // Load target descriptor
         String mcu = readTargetVar(targetDir, "MCU", "atmega328p");
         String delayIters = readTargetVar(targetDir, "DELAY_ITERS", "4000");
 
         // Detect serial usage by scanning the generated LLVM IR for serial write calls.
-        boolean usesSerial = Files.readString(inputLl).contains("@__bytelight_serial_write");
+        boolean usesSerial = Files.readString(inputLl).contains("@__espressomachine_serial_write");
 
         System.out.println("[2/6] Assembling startup.S ...");
         Path startupS = substituteStartup(scriptsDir, entryClass);

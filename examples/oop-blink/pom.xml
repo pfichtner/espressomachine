@@ -5,7 +5,7 @@
 
     <parent>
         <groupId>io.github.pfichtner</groupId>
-        <artifactId>bytelight-examples</artifactId>
+        <artifactId>espressomachine-examples</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
@@ -14,7 +14,7 @@
     <dependencies>
         <dependency>
             <groupId>io.github.pfichtner</groupId>
-            <artifactId>bytelight-api</artifactId>
+            <artifactId>espressomachine-api</artifactId>
         </dependency>
     </dependencies>
 </project>

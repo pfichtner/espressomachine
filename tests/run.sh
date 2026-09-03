@@ -1,5 +1,5 @@
 #!/bin/bash
-# ByteLight approval-style test suite.
+# EspressoMachine approval-style test suite.
 #
 # Usage:
 #   ./tests/run.sh            — run all tests, exit 1 if any fail
@@ -18,7 +18,7 @@ for arg in "$@"; do
     [[ "$arg" == "--approve" ]] && APPROVE=true || FILTER="$arg"
 done
 
-TOOL_JAR="teavm-backend/llvm/target/bytelight-teavm-ir-dumper-0.1.0-SNAPSHOT.jar"
+TOOL_JAR="teavm-backend/llvm/target/espressomachine-teavm-ir-dumper-0.1.0-SNAPSHOT.jar"
 TJ="java -jar $TOOL_JAR"
 APPROVED_DIR="tests/approved"
 ACTUAL_DIR="tests/actual"
@@ -32,10 +32,10 @@ PASS=0; FAIL=0; SKIP=0
 # Helpers
 # ------------------------------------------------------------------
 
-# Ensure the ByteLight JAR is built.
+# Ensure the EspressoMachine JAR is built.
 ensure_jar() {
     if [[ ! -f "$TOOL_JAR" ]]; then
-        echo "[setup] Building ByteLight JAR..."
+        echo "[setup] Building EspressoMachine JAR..."
         (cd teavm-backend/llvm && mvn package -q)
     fi
 }
@@ -137,7 +137,7 @@ run_ll_test "blink" \
     "examples/blink/target/classes:$API_CLASSES" \
     "Blink"
 
-# Phase 4b: Delay.time — TimeUnit fold to __bytelight_delay_ms
+# Phase 4b: Delay.time — TimeUnit fold to __espressomachine_delay_ms
 run_ll_test "delay-time" \
     "examples/delay-time/target/classes:$API_CLASSES" \
     "DelayTime"

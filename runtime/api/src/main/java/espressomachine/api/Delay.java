@@ -1,11 +1,11 @@
-package bytelight.api;
+package espressomachine.api;
 
 import java.util.concurrent.TimeUnit;
 
 /**
- * ByteLight delay API for ATmega328P (16 MHz).
+ * EspressoMachine delay API for ATmega328P (16 MHz).
  *
- * Lowered to a software delay loop by the ByteLight intrinsic layer.
+ * Lowered to a software delay loop by the EspressoMachine intrinsic layer.
  */
 public class Delay {
     /** Busy-wait for approximately `ms` milliseconds at 16 MHz. */
@@ -17,7 +17,7 @@ public class Delay {
      * When both {@code amount} and {@code unit} are compile-time constants the
      * millisecond equivalent is computed statically and folded into
      * {@link #ms(int)} — e.g. {@code Delay.time(1, TimeUnit.SECONDS)} produces
-     * {@code __bytelight_delay_ms(1000)}.
+     * {@code __espressomachine_delay_ms(1000)}.
      */
     public static void time(long amount, TimeUnit unit) {
         ms((int) unit.toMillis(amount));

@@ -1,11 +1,11 @@
-; ByteLight Phase 2 LLVM IR
+; EspressoMachine Phase 2 LLVM IR
 ; Generated from TeaVM 0.12.0 optimized IR
 
 %java_lang_Enum_t = type { ptr, i32 }
 
-declare void @__bytelight_gpio_pinmode(i32 %pin, i32 %mode)
-declare void @__bytelight_gpio_digitalwrite(i32 %pin, i32 %value)
-declare void @__bytelight_delay_ms(i32 %ms)
+declare void @__espressomachine_gpio_pinmode(i32 %pin, i32 %mode)
+declare void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value)
+declare void @__espressomachine_delay_ms(i32 %ms)
 
 define void @DelayTime__init_(ptr %v0) {
 BB0:
@@ -33,7 +33,7 @@ BB2:
   %v6 = add i64 0, 1
   ; init_class java.util.concurrent.TimeUnit
   %v3 = getelementptr i8, ptr @java_util_concurrent_TimeUnit_SECONDS, i32 0
-  call void @__bytelight_delay_ms(i32 1000)
+  call void @__espressomachine_delay_ms(i32 1000)
   %v7 = add i32 0, 13
   %v8 = add i32 0, 0
   %_t4 = load volatile i8, ptr inttoptr (i16 37 to ptr)
@@ -41,7 +41,7 @@ BB2:
   store volatile i8 %_t5, ptr inttoptr (i16 37 to ptr)
   %v9 = add i64 0, 500
   %v10 = getelementptr i8, ptr @java_util_concurrent_TimeUnit_MILLISECONDS, i32 0
-  call void @__bytelight_delay_ms(i32 500)
+  call void @__espressomachine_delay_ms(i32 500)
   br label %BB2
 }
 
