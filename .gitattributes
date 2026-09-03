@@ -1,0 +1,4 @@
+# Golden snapshots are stored as LF across all platforms so approval
+# comparisons are stable regardless of local core.autocrlf settings.
+tests/approved/*.ll text eol=lf
+tests/approved/*.hex text eol=lf
