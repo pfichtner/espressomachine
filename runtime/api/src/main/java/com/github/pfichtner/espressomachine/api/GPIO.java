@@ -10,10 +10,11 @@ package com.github.pfichtner.espressomachine.api;
  * Analog channel constants A0–A5 identify ADC channels 0–5 (PC0–PC5).
  */
 public class GPIO {
-    public static final int OUTPUT = 1;
-    public static final int INPUT  = 0;
-    public static final int HIGH   = 1;
-    public static final int LOW    = 0;
+    public static final int OUTPUT      = 1;
+    public static final int INPUT       = 0;
+    public static final int INPUT_PULLUP = 2;
+    public static final int HIGH        = 1;
+    public static final int LOW         = 0;
 
     public static final int A0 = 0;
     public static final int A1 = 1;
@@ -27,6 +28,9 @@ public class GPIO {
 
     /** Write HIGH or LOW to a digital output pin. */
     public static native void digitalWrite(int pin, int value);
+
+    /** Read the current state of a digital pin; returns HIGH (1) or LOW (0). */
+    public static native int digitalRead(int pin);
 
     /** Read 10-bit ADC value (0–1023) from analog channel A0–A5. */
     public static native int analogRead(int pin);

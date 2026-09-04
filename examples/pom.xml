@@ -56,5 +56,6 @@
         <module>random</module>
         <module>java-random</module>
         <module>java-math</module>
+        <module>digitalread</module>
     </modules>
 </project>
