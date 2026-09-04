@@ -8,9 +8,9 @@ class AnalogBlink {
         while (true) {
             int ms = GPIO.analogRead(GPIO.A0) > 512 ? 100 : 500;
             GPIO.digitalWrite(13, GPIO.HIGH);
-            Delay.ms(ms);
+            Delay.delay(ms);
             GPIO.digitalWrite(13, GPIO.LOW);
-            Delay.ms(ms);
+            Delay.delay(ms);
         }
     }
 }

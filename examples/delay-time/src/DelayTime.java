@@ -9,9 +9,9 @@ class DelayTime {
 
         while (true) {
             GPIO.digitalWrite(13, GPIO.HIGH);
-            Delay.time(1, TimeUnit.SECONDS);
+            Delay.delay(1, TimeUnit.SECONDS);
             GPIO.digitalWrite(13, GPIO.LOW);
-            Delay.time(500, TimeUnit.MILLISECONDS);
+            Delay.delay(500, TimeUnit.MILLISECONDS);
         }
     }
 }

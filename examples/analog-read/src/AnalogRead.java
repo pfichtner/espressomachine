@@ -8,10 +8,10 @@ class AnalogRead {
             int value = GPIO.analogRead(GPIO.A0);
             if (value > 512) {
                 GPIO.digitalWrite(13, GPIO.HIGH);
-                Delay.ms(100);
+                Delay.delay(100);
             } else {
                 GPIO.digitalWrite(13, GPIO.LOW);
-                Delay.ms(500);
+                Delay.delay(500);
             }
         }
     }

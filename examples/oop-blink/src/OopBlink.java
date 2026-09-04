@@ -6,9 +6,9 @@ class OopBlink {
 
         while (true) {
             led.on();
-            Delay.ms(500);
+            Delay.delay(500);
             led.off();
-            Delay.ms(500);
+            Delay.delay(500);
         }
     }
 }

@@ -6,9 +6,9 @@ class Blink {
 
         while (true) {
             GPIO.digitalWrite(13, GPIO.HIGH);
-            Delay.ms(500);
+            Delay.delay(500);
             GPIO.digitalWrite(13, GPIO.LOW);
-            Delay.ms(500);
+            Delay.delay(500);
         }
     }
 }

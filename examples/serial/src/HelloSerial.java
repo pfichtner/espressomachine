@@ -6,7 +6,7 @@ class HelloSerial {
         while (true) {
             Serial.println('A');
             Serial.println("Hello, EspressoMachine!");
-            Delay.ms(1000);
+            Delay.delay(1000);
         }
     }
 }

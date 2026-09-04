@@ -7,7 +7,7 @@ class PwmFade {
 
         while (true) {
             GPIO.analogWrite(9, duty);
-            Delay.ms(10);
+            Delay.delay(10);
             duty += step;
             if (duty >= 255) {
                 duty = 255;
