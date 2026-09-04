@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import org.teavm.model.Program;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.InvokeInstruction;
 
@@ -46,7 +47,7 @@ public class DelayEmitter implements IntrinsicEmitter {
         return w.tmpCounter();
     }
 
-    public String declarations() {
+    public String declarations(Map<String, Program> programs) {
         return """
                 declare void @__espressomachine_delay_ms(i32 %ms)
                 """;

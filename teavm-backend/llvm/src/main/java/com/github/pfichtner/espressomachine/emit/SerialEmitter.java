@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.teavm.model.BasicBlock;
+import org.teavm.model.Instruction;
+import org.teavm.model.Program;
 import org.teavm.model.ValueType;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.InvokeInstruction;
@@ -56,13 +59,30 @@ public class SerialEmitter implements IntrinsicEmitter {
         return w.tmpCounter();
     }
 
-    public String declarations() {
+    public String declarations(Map<String, Program> programs) {
+        if (!isUsedIn(programs)) return "";
         return """
                 declare void @__espressomachine_serial_begin(i32 %baud)
                 declare void @__espressomachine_serial_write(i32 %b)
                 declare void @__espressomachine_serial_print_int(i32 %n)
                 declare void @__espressomachine_serial_print_str(ptr %s)
                 """;
+    }
+
+    private boolean isUsedIn(Map<String, Program> programs) {
+        for (Program prog : programs.values()) {
+            if (prog == null) continue;
+            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                BasicBlock bb = prog.basicBlockAt(bi);
+                if (bb == null) continue;
+                for (Instruction insn : bb) {
+                    if (insn instanceof InvokeInstruction inv && canHandle(inv.getMethod().getClassName())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     // ---- Internal helpers ----

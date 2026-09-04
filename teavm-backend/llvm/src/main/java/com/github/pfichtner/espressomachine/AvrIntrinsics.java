@@ -3,9 +3,8 @@ package com.github.pfichtner.espressomachine;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
-import org.teavm.model.BasicBlock;
-import org.teavm.model.Instruction;
 import org.teavm.model.Program;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.InvokeInstruction;
@@ -59,28 +58,11 @@ public class AvrIntrinsics {
 
     /**
      * Returns all runtime declarations needed for the given program set.
-     * GPIO and Delay declarations are always included; Serial is only added when
-     * the programs contain at least one Serial call.
+     * Each emitter decides independently whether its declarations are required.
      */
     public String declarations(Map<String, Program> programs) {
-        String base = gpio.declarations() + delay.declarations();
-        return usesSerial(programs) ? base + serial.declarations() : base;
-    }
-
-    private boolean usesSerial(Map<String, Program> programs) {
-        for (Program prog : programs.values()) {
-            if (prog == null) continue;
-            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
-                BasicBlock bb = prog.basicBlockAt(bi);
-                if (bb == null) continue;
-                for (Instruction insn : bb) {
-                    if (insn instanceof InvokeInstruction inv
-                            && serial.canHandle(inv.getMethod().getClassName())) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
+        return emitters.stream()
+                .map(e -> e.declarations(programs))
+                .collect(Collectors.joining());
     }
 }

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.teavm.model.Program;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.InvokeInstruction;
 
@@ -71,7 +72,7 @@ public class GpioEmitter implements IntrinsicEmitter {
         return w.tmpCounter();
     }
 
-    public String declarations() {
+    public String declarations(Map<String, Program> programs) {
         return """
                 declare void @__espressomachine_gpio_pinmode(i32 %pin, i32 %mode)
                 declare void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value)
