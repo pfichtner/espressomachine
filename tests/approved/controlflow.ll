@@ -34,19 +34,19 @@ BB0:
   br label %BB1
 BB1:
   %v1 = add i32 0, 0
-  br label %BB2
+  br label %BB4
 BB2:
-  %v3 = phi i32 [ 0, %BB1 ], [ %v6, %BB3 ]
-  %v2 = add i32 0, 10
-  %v4 = sub i32 %v3, 10
-  %cond0 = icmp slt i32 %v3, 10
-  br i1 %cond0, label %BB3, label %BB4
+  ret i32 %v3
 BB3:
   %v5 = add i32 0, 1
   %v6 = add i32 %v3, 1
-  br label %BB2
+  br label %BB4
 BB4:
-  ret i32 %v3
+  %v3 = phi i32 [ 0, %BB1 ], [ %v6, %BB3 ]
+  %v2 = add i32 0, 10
+  %v4 = sub i32 %v3, 10
+  %cond0 = icmp sge i32 %v3, 10
+  br i1 %cond0, label %BB2, label %BB3
 }
 
 define void @ControlFlow_main() {
