@@ -89,11 +89,11 @@ Java / Kotlin / Scala / Clojure source
     ▼ EspressoMachine backend
     │  · LLVM IR generation
     │  · escape analysis (stack vs. static vs. heap error)
-    │  · AVR intrinsic lowering (GPIO, Delay → MMIO)
+    │  · AVR intrinsic lowering (GPIO, Delay, Serial, Time → MMIO / ISR)
     │
-    ▼ LLVM AVR backend (llc)
+    ▼ LLVM AVR backend (llc -function-sections -data-sections)
     │
-    ▼ avr-ld + avr-objcopy
+    ▼ avr-ld --gc-sections + avr-objcopy
     │
     ▼ ATmega328P .hex
 ```
@@ -104,10 +104,13 @@ Java / Kotlin / Scala / Clojure source
 
 - **Zero JVM overhead** — object abstractions are absorbed at compile time. The `Led` class from the OOP Blink example adds zero bytes over the equivalent imperative code.
 - **Escape analysis** — non-escaping objects stack-allocated (`alloca`); static objects become LLVM globals; heap-escaping allocations produce a compile-time error.
-- **Compile-time GPIO inlining** — `GPIO.digitalWrite(13, HIGH)` with a constant pin number compiles to a single AVR `sbi` instruction.
-- **Serial (USART0)** — `Serial.begin()`, `Serial.print()`, `Serial.println()` backed by a busy-wait AVR runtime; compile-time constant baud rates are inlined as four MMIO stores.
+- **Compile-time GPIO inlining** — `GPIO.digitalWrite(13, HIGH)` with a constant pin number compiles to a single `sbi`/`cbi` instruction; `GPIO.digitalRead(2)` with a constant pin inlines to a `PIND` load and bit-test.
+- **Dead-code elimination** — each runtime function lands in its own ELF section (`-function-sections`); `avr-ld --gc-sections` drops any section not reachable from the interrupt vector table. A Blink sketch that inlines all its GPIO calls carries no gpio.ll code at all.
+- **Serial (USART0)** — `Serial.begin()`, `Serial.print()`, `Serial.println()`, `Serial.available()`, `Serial.read()` backed by a busy-wait AVR runtime; compile-time constant baud rates are inlined as four MMIO stores.
+- **Non-blocking timing** — `Time.millis()` backed by a Timer0 overflow ISR; the compiler injects `__espressomachine_time_init()` before `setup()` only when `millis()` is referenced.
+- **Utility functions** — `Functions.map()` and `Functions.constrain()` match Arduino's macros; both are pure Java and get constant-folded or inlined by TeaVM.
 - **Arduino-style setup/loop** — entry classes without a `main()` can define `static void setup()` / `static void loop()`; EspressoMachine synthesizes the `main()` wrapper automatically.
-- **Approval-style test suite** — golden `.ll` and `.hex` files catch regressions across all steps.
+- **Approval-style test suite** — golden `.ll` and `.hex` files catch regressions across all steps; system tests run generated HEX inside virtualavr.
 
 ## Requirements
 
@@ -185,38 +188,46 @@ Default output directory: `build/` relative to the working directory.
 
 ## API reference
 
-The API lives in package `espressomachine.api`. Compile the stubs once, then reference them when compiling user code:
+The API lives in `runtime/api/`. Compile the stubs once, then reference them when compiling user code:
 
 ```bash
-javac runtime/api/*.java -d api-classes/
-javac -cp api-classes MyProgram.java -d classes/
-```
-
-Or compile everything in one pass:
-
-```bash
-javac runtime/api/*.java MyProgram.java -d classes/
+mvn compile -q -f runtime/api/pom.xml
+javac -cp runtime/api/target/classes MyProgram.java -d classes/
 ```
 
 ```java
 import com.github.pfichtner.espressomachine.api.*;
 
-// GPIO.java — lowered to AVR MMIO by the backend
+// GPIO — lowered to AVR MMIO; constant pins are inlined to sbi/cbi/PIND load
+GPIO.pinMode(2,  GPIO.INPUT_PULLUP);   // DDR clear + PORT set (internal pull-up)
 GPIO.pinMode(13, GPIO.OUTPUT);
 GPIO.digitalWrite(13, GPIO.HIGH);
 GPIO.digitalWrite(13, GPIO.LOW);
+int state = GPIO.digitalRead(2);       // reads PINx register bit → 0 or 1
+int adc   = GPIO.analogRead(GPIO.A0); // 10-bit ADC, 0–1023
+GPIO.analogWrite(9, 128);             // 8-bit PWM, 0–255
 
-// Delay.java
+// Delay — busy-wait; constant ms is inlined as a calibrated loop
 Delay.ms(500);
+Delay.time(1, java.util.concurrent.TimeUnit.SECONDS);
 
-// Serial.java — USART0 on ATmega328P
-Serial.begin(9600);      // baud rate must be a compile-time constant
+// Serial — USART0; constant baud rate inlined as four MMIO stores
+Serial.begin(9600);
 Serial.print('A');
 Serial.println(42);
-Serial.println();        // CR+LF
+Serial.println();           // CR+LF
+int avail = Serial.available();
+int b     = Serial.read();
+
+// Time — Timer0 overflow counter; init injected automatically before setup()
+int now = Time.millis();    // ms since boot, wraps ~49.7 days
+
+// Functions — Arduino utility macros, inlined by TeaVM
+int pwm = Functions.map(analogValue, 0, 1023, 0, 255);
+int clamped = Functions.constrain(raw, 0, 255);
 ```
 
-`GPIO` calls with compile-time-constant pin numbers are inlined directly to AVR `sbi`/`cbi` instructions; non-constant pins fall back to a runtime lookup in `gpio.ll`. `Serial.begin()` with a constant baud rate is inlined as four USART register writes; `Serial.write()` busy-waits on UDRE0 and is implemented in `serial.ll`.
+`GPIO` calls with compile-time-constant pin numbers are inlined to direct `sbi`/`cbi`/`PIND` load instructions; non-constant pins fall back to a runtime lookup table in `gpio.ll`. `Serial.begin()` with a constant baud rate is inlined as four USART register writes. `Time.millis()` is linked only when referenced; the Timer0 ISR and init are added automatically.
 
 ## Memory model
 
@@ -236,96 +247,94 @@ Heap/GC is explicitly out of scope for the initial release.
    F_CPU=16000000
    DELAY_ITERS=4000   # F_CPU / 4 / 1000
    ```
-2. Provide `gpio.ll` and `delay.ll` (or symlink if registers are identical).
-3. Create `targets/<mcu>/startup.S`, `linker.ld`.
+2. Provide `gpio.ll`, `delay.ll`, `time.ll` (or symlink if registers are identical).
+3. Create `targets/<mcu>/startup.S` (with interrupt vector table), `linker.ld`.
 4. Run: `espressomachine build MyClass --target <mcu>`
 
 ## Project layout
 
 ```
 bin/espressomachine                  CLI launcher
-teavm-backend/llvm/           Java compiler (Maven project)
-  src/main/java/espressomachine/
+teavm-backend/llvm/                  Java compiler (Maven project)
+  src/main/java/com/github/pfichtner/espressomachine/
     cli/EspressoMachineCli.java      CLI entry point & subcommand dispatch
-    cli/Pipeline.java         AVR toolchain orchestration
-    IrDumper.java             TeaVM driver (also legacy entry point)
-    LlvmModuleEmitter.java    LLVM IR module writer
-    LlvmMethodEmitter.java    Per-method SSA → LLVM translation
-    EscapeAnalyzer.java       Intra-procedural escape analysis
-    AvrIntrinsics.java        GPIO/Delay/Serial → AVR MMIO lowering
+    cli/Pipeline.java                AVR toolchain orchestration
+    LlvmModuleEmitter.java           LLVM IR module writer
+    LlvmMethodEmitter.java           Per-method SSA → LLVM translation
+    EscapeAnalyzer.java              Intra-procedural escape analysis
+    AvrIntrinsics.java               Dispatch to per-API intrinsic emitters
+    emit/
+      GpioEmitter.java               GPIO → MMIO (pinMode, digitalRead/Write, analog)
+      DelayEmitter.java              Delay.ms / Delay.time → busy-wait loop
+      SerialEmitter.java             Serial → USART0 MMIO
+      TimeEmitter.java               Time.millis() → Timer0 overflow counter
+      MathBridgeEmitter.java         java.lang.Math → LLVM intrinsics / libm
+      RandomEmitter.java             Random → LCG runtime
 runtime/
-  api/                        Target-agnostic Java stubs (GPIO.java, Delay.java, Serial.java)
-  avr/atmega328p/             ATmega328P runtime implementation
-    target.sh                 MCU descriptor (F_CPU, DELAY_ITERS)
-    gpio.ll                   Runtime GPIO fallback (non-constant pins)
-    delay.ll                  Busy-wait delay loop template
-    serial.ll                 USART0 TX busy-wait + baud-rate fallback
-targets/atmega328p/           Linker script, startup assembly, build script
-examples/                     Demonstration programs
+  api/                               Target-agnostic Java stubs
+    GPIO.java                        pinMode, digitalRead/Write, analogRead/Write
+    Delay.java                       ms(), time()
+    Serial.java                      begin, print, println, available, read
+    Time.java                        millis()
+    Functions.java                   map(), constrain()
+    Random.java                      nextInt()
+  avr/atmega328p/                    ATmega328P runtime implementation
+    target.sh                        MCU descriptor (F_CPU, DELAY_ITERS)
+    gpio.ll                          Runtime GPIO fallback (non-constant pins)
+    delay.ll                         Busy-wait delay loop template
+    serial.ll                        USART0 TX/RX busy-wait
+    time.ll                          Timer0 overflow ISR + millis()
+    random.ll / random.S             LCG random number generator
+targets/atmega328p/                  Linker script, startup assembly, build script
+  startup.S                          Full 26-entry interrupt vector table
+  linker.ld                          Flash/SRAM layout with --gc-sections support
+examples/                            15 demonstration programs
 tests/
-  run.sh                      Approval-style test runner
-  systemtest-blink.sh         End-to-end blink test on virtualavr (Docker, websocat, jq)
-  systemtest-serial.sh        End-to-end serial test on virtualavr (Docker, websocat, stty)
-  approved/                   Golden .ll and .hex snapshots
+  run.sh                             Approval-style test runner (25 tests)
+  approved/                          Golden .ll and .hex snapshots
+  systemtest-blink.sh                End-to-end blink test on virtualavr
+  systemtest-serial.sh               End-to-end serial print test on virtualavr
+  systemtest-echo.sh                 End-to-end serial echo test on virtualavr
+  systemtest-analog.sh               End-to-end ADC → blink-rate test on virtualavr
+  systemtest-digitalread.sh          End-to-end digitalRead → blink test on virtualavr
 ```
 
 ## Tests
 
 ```bash
-bash tests/run.sh             # run all 12 approval tests (exit 1 on any failure)
+bash tests/run.sh             # run all 25 approval tests (exit 1 on any failure)
 bash tests/run.sh <name>      # run a single test by name
 bash tests/run.sh --approve   # overwrite golden files after an intentional change
 ```
 
 ### System integration tests (virtualavr)
 
-Both system tests run the generated `.hex` inside [virtualavr](https://github.com/pfichtner/virtualavr),
-an AVR simulator running in Docker.
-
-**`tests/systemtest-blink.sh`** — enables pin-state reporting on pin 13 over
-the simulator's WebSocket endpoint and asserts the pin toggles at least
-`BLINK_TOGGLES` (default 4) times, proving the LED on/off cycle runs correctly.
+System tests run the generated `.hex` inside [virtualavr](https://github.com/pfichtner/virtualavr),
+an AVR simulator running in Docker. They are not part of the default `tests/run.sh` run:
 
 ```bash
-# Requires: Docker, websocat, jq
-bash tests/systemtest-blink.sh
-bash tests/systemtest-blink.sh tests/approved/blink.hex   # pre-built hex
+bash tests/run.sh systemtest-blink          # LED blink timing
+bash tests/run.sh systemtest-serial         # USART TX
+bash tests/run.sh systemtest-echo           # USART RX→TX echo
+bash tests/run.sh systemtest-analog         # ADC → blink rate
+bash tests/run.sh systemtest-digitalread    # digital input → LED blink
+RUN_INTEGRATION_TESTS=1 bash tests/run.sh  # approval tests + all system tests
 ```
 
-**`tests/systemtest-serial.sh`** — bind-mounts the host `/dev/` directory so
-virtualavr's socat creates a PTY (e.g. `/dev/ttyUSB0`) on the host. The test
-configures the port with `stty`, pauses the simulation until ready, then
-reads raw bytes and asserts that `'A'` (0x41) arrives at least `SERIAL_MIN`
-(default 3) times within `SERIAL_TIMEOUT` (default 30) seconds.
-
-```bash
-# Requires: Docker (with /dev bind-mount capability), websocat, stty
-bash tests/systemtest-serial.sh
-bash tests/systemtest-serial.sh tests/approved/serial.hex   # pre-built hex
-```
-
-Both tests need Docker and are not part of the default `tests/run.sh` run:
-
-```bash
-bash tests/run.sh systemtest-blink             # blink systemtest only
-bash tests/run.sh systemtest-serial            # serial systemtest only
-RUN_INTEGRATION_TESTS=1 bash tests/run.sh      # approval tests + both systemtests
-```
+All system tests accept a pre-built `.hex` as an optional first argument and fall back to the approved golden hex when the AVR toolchain is unavailable.
 
 Configuration via environment variables:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `VIRTUALAVR_IMAGE` | `pfichtner/virtualavr:latest` | Docker image to run |
-| `BUILD_TIMEOUT` | `180` | Seconds to wait for the container to start |
-| **Blink** | | |
-| `BLINK_PIN` | `13` | Pin to watch for blinking |
-| `BLINK_TIMEOUT` | `30` | Seconds to observe before failing |
-| `BLINK_TOGGLES` | `4` | Minimum on/off toggle count to accept |
-| **Serial** | | |
-| `SERIAL_BAUD` | `9600` | Baud rate (must match `Serial.begin()` in the sketch) |
-| `SERIAL_TIMEOUT` | `30` | Seconds to read from the serial device |
-| `SERIAL_MIN` | `3` | Minimum `'A'` byte count to accept |
+| `VIRTUALAVR_IMAGE` | `pfichtner/virtualavr:latest` | Docker image |
+| `BUILD_TIMEOUT` | `180` | Seconds to wait for container start |
+| `BLINK_PIN` | `13` | Pin to watch (blink test) |
+| `BLINK_TIMEOUT` | `5` | Observation window in seconds |
+| `BLINK_TOGGLES` | `6` | Minimum toggle count |
+| `SERIAL_BAUD` | `9600` | Baud rate for serial tests |
+| `SERIAL_TIMEOUT` | `30` | Seconds to read from serial device |
+| `SERIAL_MIN` | `3` | Minimum `'A'` byte count |
 
 ## How we got here
 
@@ -340,6 +349,9 @@ Configuration via environment variables:
 | 6 | First Blink — `Blink.hex` 332 bytes, `sbi`/`cbi` verified by disassembly |
 | 7 | OOP Blink — `Led` class with constructor, fields, instance methods; 328 bytes |
 | CLI | `espressomachine build / inspect / emit-llvm / flash` |
+| 8 | Serial, ADC, PWM, Random, java.lang.Math, java.util.Random |
+| 9 | `GPIO.digitalRead` + `INPUT_PULLUP`, `Functions.map/constrain`, `Time.millis()` |
+| 10 | Full interrupt vector table; Timer0 ISR for `millis()`; dead-code elimination (`--gc-sections`): Blink 272 bytes |
 
 ## Research notes
 
