@@ -24,7 +24,7 @@ BB1:
   store volatile i8 0, ptr inttoptr (i16 197 to ptr)
   store volatile i8 103, ptr inttoptr (i16 196 to ptr)
   store volatile i8 24, ptr inttoptr (i16 193 to ptr)
-  store volatile i8 6,  ptr inttoptr (i16 194 to ptr)
+  store volatile i8 6, ptr inttoptr (i16 194 to ptr)
   br label %BB2
 BB2:
   %_t0 = load volatile i8, ptr inttoptr (i16 192 to ptr)

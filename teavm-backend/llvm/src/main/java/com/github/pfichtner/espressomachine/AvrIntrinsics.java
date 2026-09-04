@@ -9,6 +9,7 @@ import org.teavm.model.instructions.InvokeInstruction;
 
 import com.github.pfichtner.espressomachine.emit.DelayEmitter;
 import com.github.pfichtner.espressomachine.emit.GpioEmitter;
+import com.github.pfichtner.espressomachine.emit.LlvmWriter;
 import com.github.pfichtner.espressomachine.emit.SerialEmitter;
 
 /**
@@ -39,15 +40,16 @@ public class AvrIntrinsics {
                     Map<Integer, String> constVars, int tmpCounter,
                     Function<Variable, String> resolveVar,
                     Map<Integer, String> objectRefs) {
+        LlvmWriter w = new LlvmWriter(out, tmpCounter);
         String cls = insn.getMethod().getClassName();
         if (GpioEmitter.canHandle(cls)) {
-            return GpioEmitter.emit(out, insn, constVars, tmpCounter, resolveVar, objectRefs);
+            return GpioEmitter.emit(w, insn, constVars, resolveVar, objectRefs);
         }
         if (DelayEmitter.canHandle(cls)) {
-            return DelayEmitter.emit(out, insn, constVars, tmpCounter, resolveVar, objectRefs);
+            return DelayEmitter.emit(w, insn, constVars, resolveVar, objectRefs);
         }
         if (SerialEmitter.canHandle(cls)) {
-            return SerialEmitter.emit(out, insn, constVars, tmpCounter, resolveVar, objectRefs);
+            return SerialEmitter.emit(w, insn, constVars, resolveVar, objectRefs);
         }
         return tmpCounter;
     }

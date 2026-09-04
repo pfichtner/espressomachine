@@ -27,22 +27,22 @@ public class DelayEmitter {
     }
 
     /**
-     * Emit a Delay intrinsic call. Handles class check, method dispatch and
-     * fallback for unknown methods.
+     * Emit a Delay intrinsic call into {@code w}.
      *
      * @return updated tmpCounter
      */
-    public static int emit(StringBuilder out, InvokeInstruction insn,
-                           Map<Integer, String> constVars, int tmpCounter,
+    public static int emit(LlvmWriter w, InvokeInstruction insn,
+                           Map<Integer, String> constVars,
                            Function<Variable, String> resolveVar,
                            Map<Integer, String> objectRefs) {
         String method = insn.getMethod().getName();
         List<? extends Variable> args = insn.getArguments();
-        return switch (method) {
-            case "ms"   -> emitMs(out, args, tmpCounter, resolveVar);
-            case "time" -> emitTime(out, args, constVars, objectRefs, tmpCounter, resolveVar);
-            default     -> emitFallback(out, insn, args, tmpCounter, resolveVar);
-        };
+        switch (method) {
+            case "ms"   -> emitMs(w, args, resolveVar);
+            case "time" -> emitTime(w, args, constVars, objectRefs, resolveVar);
+            default     -> emitFallback(w, insn, args, resolveVar);
+        }
+        return w.tmpCounter();
     }
 
     public static String declarations() {
@@ -53,17 +53,15 @@ public class DelayEmitter {
 
     // ---- Internal helpers ----
 
-    private static int emitMs(StringBuilder out, List<? extends Variable> args, int tc,
-                              Function<Variable, String> resolveVar) {
-        out.append("  call void @__espressomachine_delay_ms(i32 ")
-           .append(resolveVar.apply(args.get(0))).append(")\n");
-        return tc;
+    private static void emitMs(LlvmWriter w, List<? extends Variable> args,
+                               Function<Variable, String> resolveVar) {
+        w.callVoid("__espressomachine_delay_ms", resolveVar.apply(args.get(0)));
     }
 
-    private static int emitTime(StringBuilder out, List<? extends Variable> args,
-                                Map<Integer, String> constVars,
-                                Map<Integer, String> objectRefs, int tc,
-                                Function<Variable, String> resolveVar) {
+    private static void emitTime(LlvmWriter w, List<? extends Variable> args,
+                                 Map<Integer, String> constVars,
+                                 Map<Integer, String> objectRefs,
+                                 Function<Variable, String> resolveVar) {
         String unitGlobal = (args.size() > 1) ? objectRefs.get(args.get(1).getIndex()) : null;
         Integer denominator = null;   // unit < 1 ms (nanos/micros)
         long multiplier = 1;          // unit >= 1 ms
@@ -83,53 +81,41 @@ public class DelayEmitter {
 
         if (unitGlobal == null) {
             // Unknown (non-constant) unit — generic runtime fallback.
-            out.append("  call void @__espressomachine_delay_time(i32 ")
-               .append(resolveVar.apply(args.get(0))).append(", i32 ")
-               .append(resolveVar.apply(args.get(1))).append(")\n");
-            return tc;
+            w.callVoid("__espressomachine_delay_time",
+                    resolveVar.apply(args.get(0)), resolveVar.apply(args.get(1)));
+            return;
         }
 
         Integer amount = constInt(args.get(0), constVars);
         if (amount != null) {
             // Constant amount + constant unit → statically calculated millis.
             long millis = (denominator != null) ? amount / denominator : amount * multiplier;
-            out.append("  call void @__espressomachine_delay_ms(i32 ").append(millis).append(")\n");
-            return tc;
+            w.callVoid("__espressomachine_delay_ms", millis);
+            return;
         }
 
         // Runtime amount (i64) with a known unit — scale inline to milliseconds.
-        String tmp = "%_t" + tc++;
-        out.append("  ").append(tmp)
-           .append(" = trunc i64 ").append(resolveVar.apply(args.get(0))).append(" to i32\n");
+        String tmp = w.temp();
+        w.trunc64to32(tmp, resolveVar.apply(args.get(0)));
         if (denominator != null) {
-            String tmp2 = "%_t" + tc++;
-            out.append("  ").append(tmp2)
-               .append(" = sdiv i32 ").append(tmp).append(", ").append(denominator).append("\n");
+            String tmp2 = w.temp();
+            w.sdiv32(tmp2, tmp, denominator);
             tmp = tmp2;
         } else if (multiplier != 1) {
-            String tmp2 = "%_t" + tc++;
-            out.append("  ").append(tmp2)
-               .append(" = mul i32 ").append(tmp).append(", ").append(multiplier).append("\n");
+            String tmp2 = w.temp();
+            w.mul32(tmp2, tmp, (int) multiplier);
             tmp = tmp2;
         }
-        out.append("  call void @__espressomachine_delay_ms(i32 ").append(tmp).append(")\n");
-        return tc;
+        w.callVoid("__espressomachine_delay_ms", tmp);
     }
 
-    private static int emitFallback(StringBuilder out, InvokeInstruction insn,
-                                    List<? extends Variable> args, int tc,
-                                    Function<Variable, String> resolveVar) {
+    private static void emitFallback(LlvmWriter w, InvokeInstruction insn,
+                                     List<? extends Variable> args,
+                                     Function<Variable, String> resolveVar) {
         String fqn = insn.getMethod().getClassName();
         String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
-        out.append("  call void @__espressomachine_")
-           .append(simpleName.toLowerCase()).append("_")
-           .append(insn.getMethod().getName()).append("(");
-        for (int i = 0; i < args.size(); i++) {
-            if (i > 0) out.append(", ");
-            out.append("i32 ").append(resolveVar.apply(args.get(i)));
-        }
-        out.append(")\n");
-        return tc;
+        w.callVoid("__espressomachine_" + simpleName.toLowerCase() + "_" + insn.getMethod().getName(),
+                args.stream().map(resolveVar).toArray());
     }
 
     static Integer constInt(Variable v, Map<Integer, String> constVars) {

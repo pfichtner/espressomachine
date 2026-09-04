@@ -22,6 +22,11 @@ public class SerialEmitter {
 
     private static final int F_CPU = 16_000_000; // ATmega328P @ 16 MHz
 
+    private static final int RXEN_TXEN = 24;   // UCSR0B = RXEN | TXEN
+    private static final int FRAME_8N1  = 6;   // UCSR0C = 8 data bits, no parity, 1 stop
+    private static final int CR = 13;          // carriage return
+    private static final int LF = 10;          // line feed
+
     private SerialEmitter() {}
 
     public static boolean canHandle(String className) {
@@ -29,26 +34,26 @@ public class SerialEmitter {
     }
 
     /**
-     * Emit a Serial intrinsic call. Handles class check, method dispatch and
-     * fallback for unknown methods.
+     * Emit a Serial intrinsic call into {@code w}.
      *
      * @return updated tmpCounter
      */
-    public static int emit(StringBuilder out, InvokeInstruction insn,
-                           Map<Integer, String> constVars, int tmpCounter,
+    public static int emit(LlvmWriter w, InvokeInstruction insn,
+                           Map<Integer, String> constVars,
                            Function<Variable, String> resolveVar,
                            Map<Integer, String> objectRefs) {
         String method = insn.getMethod().getName();
         List<? extends Variable> args = insn.getArguments();
-        return switch (method) {
-            case "begin"     -> emitBegin(out, args, constVars, tmpCounter, resolveVar);
-            case "write"     -> emitWrite(out, args, tmpCounter, resolveVar);
-            case "available" -> emitAvailable(out, insn, tmpCounter, resolveVar);
-            case "read"      -> emitRead(out, insn, tmpCounter, resolveVar);
-            case "print"     -> emitPrint(out, args, insn, objectRefs, tmpCounter, resolveVar);
-            case "println"   -> emitPrintln(out, args, insn, objectRefs, tmpCounter, resolveVar);
-            default          -> emitFallback(out, insn, args, tmpCounter, resolveVar);
-        };
+        switch (method) {
+            case "begin"     -> emitBegin(w, args, constVars, resolveVar);
+            case "write"     -> emitWrite(w, args, resolveVar);
+            case "available" -> emitAvailable(w, insn, resolveVar);
+            case "read"      -> emitRead(w, insn, resolveVar);
+            case "print"     -> emitPrint(w, args, insn, objectRefs, resolveVar);
+            case "println"   -> emitPrintln(w, args, insn, objectRefs, resolveVar);
+            default          -> emitFallback(w, insn, args, resolveVar);
+        }
+        return w.tmpCounter();
     }
 
     public static String declarations() {
@@ -62,81 +67,70 @@ public class SerialEmitter {
 
     // ---- Internal helpers ----
 
-    private static int emitBegin(StringBuilder out, List<? extends Variable> args,
-                                 Map<Integer, String> constVars, int tc,
-                                 Function<Variable, String> resolveVar) {
+    private static void emitBegin(LlvmWriter w, List<? extends Variable> args,
+                                  Map<Integer, String> constVars,
+                                  Function<Variable, String> resolveVar) {
         Integer baud = constInt(args.get(0), constVars);
         if (baud != null && baud > 0) {
             int ubrr = F_CPU / (16 * baud) - 1;
-            out.append("  store volatile i8 ").append((ubrr >> 8) & 0xFF)
-               .append(", ptr inttoptr (i16 197 to ptr)\n");  // UBRR0H
-            out.append("  store volatile i8 ").append(ubrr & 0xFF)
-               .append(", ptr inttoptr (i16 196 to ptr)\n");  // UBRR0L
-            out.append("  store volatile i8 24, ptr inttoptr (i16 193 to ptr)\n"); // UCSR0B = RXEN|TXEN
-            out.append("  store volatile i8 6,  ptr inttoptr (i16 194 to ptr)\n"); // UCSR0C = 8N1
+            w.storeVolatile(String.valueOf((ubrr >> 8) & 0xFF), RegisterFile.UBRR0H);
+            w.storeVolatile(String.valueOf(ubrr & 0xFF), RegisterFile.UBRR0L);
+            w.storeVolatile(String.valueOf(RXEN_TXEN), RegisterFile.UCSR0B);
+            w.storeVolatile(String.valueOf(FRAME_8N1), RegisterFile.UCSR0C);
         } else {
-            out.append("  call void @__espressomachine_serial_begin(i32 ")
-               .append(resolveVar.apply(args.get(0))).append(")\n");
+            w.callVoid("__espressomachine_serial_begin", resolveVar.apply(args.get(0)));
         }
-        return tc;
     }
 
-    private static int emitWrite(StringBuilder out, List<? extends Variable> args,
-                                 int tc, Function<Variable, String> resolveVar) {
-        out.append("  call void @__espressomachine_serial_write(i32 ")
-           .append(resolveVar.apply(args.get(0))).append(")\n");
-        return tc;
+    private static void emitWrite(LlvmWriter w, List<? extends Variable> args,
+                                  Function<Variable, String> resolveVar) {
+        w.callVoid("__espressomachine_serial_write", resolveVar.apply(args.get(0)));
     }
 
-    private static int emitAvailable(StringBuilder out, InvokeInstruction insn,
-                                     int tc, Function<Variable, String> resolveVar) {
-        // Read RXC0 (bit 7 = 0x80) from UCSR0A (0xC0 = 192); return 1 if set, 0 otherwise.
-        out.append("  %_t").append(tc)
-           .append(" = load volatile i8, ptr inttoptr (i16 192 to ptr)\n");
-        out.append("  %_t").append(tc + 1)
-           .append(" = and i8 %_t").append(tc).append(", -128\n");
-        out.append("  %_t").append(tc + 2)
-           .append(" = icmp ne i8 %_t").append(tc + 1).append(", 0\n");
+    private static void emitAvailable(LlvmWriter w, InvokeInstruction insn,
+                                      Function<Variable, String> resolveVar) {
+        // Read RXC0 (bit 7 = 0x80) from UCSR0A; return 1 if set, 0 otherwise.
+        String t0 = w.temp();
+        String t1 = w.temp();
+        String t2 = w.temp();
+        w.loadVolatile(t0, RegisterFile.UCSR0A);
+        w.and8Raw(t1, t0, -128);   // mask RXC0 (bit 7, = 0x80 as signed i8)
+        w.icmpNe8(t2, t1);
         if (insn.getReceiver() != null) {
-            out.append("  ").append(resolveVar.apply(insn.getReceiver()))
-               .append(" = zext i1 %_t").append(tc + 2).append(" to i32\n");
+            w.zext1to32(resolveVar.apply(insn.getReceiver()), t2);
         }
-        return tc + 3;
     }
 
-    private static int emitRead(StringBuilder out, InvokeInstruction insn,
-                                int tc, Function<Variable, String> resolveVar) {
-        // Read UDR0 (0xC6 = 198) and zero-extend to i32; call available() first.
-        out.append("  %_t").append(tc)
-           .append(" = load volatile i8, ptr inttoptr (i16 198 to ptr)\n");
+    private static void emitRead(LlvmWriter w, InvokeInstruction insn,
+                                 Function<Variable, String> resolveVar) {
+        // Read UDR0 and zero-extend to i32; call available() first.
+        String t0 = w.temp();
+        w.loadVolatile(t0, RegisterFile.UDR0);
         if (insn.getReceiver() != null) {
-            out.append("  ").append(resolveVar.apply(insn.getReceiver()))
-               .append(" = zext i8 %_t").append(tc).append(" to i32\n");
+            w.zext8to32(resolveVar.apply(insn.getReceiver()), t0);
         }
-        return tc + 1;
     }
 
-    private static int emitPrintln(StringBuilder out, List<? extends Variable> args,
-                                   InvokeInstruction insn,
-                                   Map<Integer, String> objectRefs, int tc,
-                                   Function<Variable, String> resolveVar) {
+    private static void emitPrintln(LlvmWriter w, List<? extends Variable> args,
+                                    InvokeInstruction insn,
+                                    Map<Integer, String> objectRefs,
+                                    Function<Variable, String> resolveVar) {
         if (args.isEmpty()) {
             // println() → CR + LF
-            out.append("  call void @__espressomachine_serial_write(i32 13)\n");
-            out.append("  call void @__espressomachine_serial_write(i32 10)\n");
-            return tc;
+            w.callVoid("__espressomachine_serial_write", CR);
+            w.callVoid("__espressomachine_serial_write", LF);
+            return;
         }
-        tc = emitPrint(out, args, insn, objectRefs, tc, resolveVar);
-        out.append("  call void @__espressomachine_serial_write(i32 13)\n");
-        out.append("  call void @__espressomachine_serial_write(i32 10)\n");
-        return tc;
+        emitPrint(w, args, insn, objectRefs, resolveVar);
+        w.callVoid("__espressomachine_serial_write", CR);
+        w.callVoid("__espressomachine_serial_write", LF);
     }
 
-    private static int emitPrint(StringBuilder out, List<? extends Variable> args,
-                                 InvokeInstruction insn,
-                                 Map<Integer, String> objectRefs, int tc,
-                                 Function<Variable, String> resolveVar) {
-        if (args.isEmpty()) return tc;
+    private static void emitPrint(LlvmWriter w, List<? extends Variable> args,
+                                  InvokeInstruction insn,
+                                  Map<Integer, String> objectRefs,
+                                  Function<Variable, String> resolveVar) {
+        if (args.isEmpty()) return;
         Variable arg = args.get(0);
 
         // Distinguish by the declared parameter type: String (object) vs char/int.
@@ -148,31 +142,21 @@ public class SerialEmitter {
             // String: prefer a string-literal global, else the raw ptr.
             String global = objectRefs.get(arg.getIndex());
             String target = (global != null) ? global : resolveVar.apply(arg);
-            out.append("  call void @__espressomachine_serial_print_str(ptr ")
-               .append(target).append(")\n");
-            return tc;
+            w.callVoidPtr("__espressomachine_serial_print_str", target);
+            return;
         }
 
         // Numeric (int or char) — transmit the decimal representation.
-        out.append("  call void @__espressomachine_serial_print_int(i32 ")
-           .append(resolveVar.apply(arg)).append(")\n");
-        return tc;
+        w.callVoid("__espressomachine_serial_print_int", resolveVar.apply(arg));
     }
 
-    private static int emitFallback(StringBuilder out, InvokeInstruction insn,
-                                    List<? extends Variable> args, int tc,
-                                    Function<Variable, String> resolveVar) {
+    private static void emitFallback(LlvmWriter w, InvokeInstruction insn,
+                                     List<? extends Variable> args,
+                                     Function<Variable, String> resolveVar) {
         String fqn = insn.getMethod().getClassName();
         String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
-        out.append("  call void @__espressomachine_")
-           .append(simpleName.toLowerCase()).append("_")
-           .append(insn.getMethod().getName()).append("(");
-        for (int i = 0; i < args.size(); i++) {
-            if (i > 0) out.append(", ");
-            out.append("i32 ").append(resolveVar.apply(args.get(i)));
-        }
-        out.append(")\n");
-        return tc;
+        w.callVoid("__espressomachine_" + simpleName.toLowerCase() + "_" + insn.getMethod().getName(),
+                args.stream().map(resolveVar).toArray());
     }
 
     static Integer constInt(Variable v, Map<Integer, String> constVars) {
