@@ -40,6 +40,9 @@ class LlvmModuleEmitter {
     // postOptPrograms/Methods come from afterOptimizations callbacks
     private final LinkedHashMap<String, Program> postOptPrograms;
     private final LinkedHashMap<String, MethodReader> postOptMethods;
+    // preInliningPrograms — used to detect RuntimeRandomBridge invokes
+    // that were inlined away by the optimizer
+    private final LinkedHashMap<String, Program> preInliningPrograms;
     // Entry class name; used to resolve the main()/setup()/loop() entry method.
     private final String entryClass;
 
@@ -54,10 +57,12 @@ class LlvmModuleEmitter {
     LlvmModuleEmitter(ListableClassHolderSource classes,
                       LinkedHashMap<String, Program> postOptPrograms,
                       LinkedHashMap<String, MethodReader> postOptMethods,
+                      LinkedHashMap<String, Program> preInliningPrograms,
                       String entryClass) {
         this.classes = classes;
         this.postOptPrograms = postOptPrograms;
         this.postOptMethods = postOptMethods;
+        this.preInliningPrograms = preInliningPrograms;
         this.entryClass = entryClass;
         buildFieldMaps();
     }
@@ -128,9 +133,18 @@ class LlvmModuleEmitter {
             // $values() synthesized by javac requires array allocation — skip.
             if (enumClasses.contains(mClass) && "$values".equals(method.getName())) continue;
 
+            // If the pre-inlining program has RuntimeRandomBridge invokes that were
+            // inlined away by the optimizer, use the pre-inlining program for emission.
+            // The emitter intercepts the InvokeInstruction nodes and emits AVR intrinsics.
+            Program emitProg = prog;
+            Program preInl = preInliningPrograms.get(key);
+            if (preInl != null && hasBridgeInvokes(preInl)) {
+                emitProg = preInl;
+            }
+
             StringBuilder methodOut = new StringBuilder();
             try {
-                new LlvmMethodEmitter(methodOut, prog, method, this).emit();
+                new LlvmMethodEmitter(methodOut, emitProg, method, this).emit();
             } catch (Exception e) {
                 methodOut.append("; FAILED: ").append(key).append(" — ").append(e.getMessage()).append("\n\n");
             }
@@ -338,6 +352,30 @@ class LlvmModuleEmitter {
             || className.startsWith("sun.")
             || className.startsWith("com.sun.")
             || className.startsWith("org.teavm.");
+    }
+
+    /** Bridge class used by the transformer to replace java.util.Random invokes. */
+    private static final String BRIDGE_CLASS =
+            "com.github.pfichtner.espressomachine.emit.RuntimeRandomBridge";
+
+    /**
+     * Returns true if the program contains any {@code InvokeInstruction}
+     * targeting {@link RuntimeRandomBridge} methods.  Such programs need to be
+     * emitted from the pre-inlining snapshot because the optimizer inlines
+     * the bridge methods and replaces the invokes with field loads.
+     */
+    static boolean hasBridgeInvokes(Program prog) {
+        for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+            BasicBlock bb = prog.basicBlockAt(bi);
+            if (bb == null) continue;
+            for (Instruction insn : bb) {
+                if (insn instanceof InvokeInstruction inv
+                        && BRIDGE_CLASS.equals(inv.getMethod().getClassName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // Intrinsic API classes have no LLVM definitions — they are handled by AvrIntrinsics.

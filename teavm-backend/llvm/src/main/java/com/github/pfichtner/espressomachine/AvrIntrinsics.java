@@ -12,7 +12,10 @@ import org.teavm.model.instructions.InvokeInstruction;
 import com.github.pfichtner.espressomachine.emit.DelayEmitter;
 import com.github.pfichtner.espressomachine.emit.GpioEmitter;
 import com.github.pfichtner.espressomachine.emit.IntrinsicEmitter;
+import com.github.pfichtner.espressomachine.emit.JavaRandomEmitter;
 import com.github.pfichtner.espressomachine.emit.LlvmWriter;
+import com.github.pfichtner.espressomachine.emit.RandomBridgeEmitter;
+import com.github.pfichtner.espressomachine.emit.RandomEmitter;
 import com.github.pfichtner.espressomachine.emit.SerialEmitter;
 
 /**
@@ -25,7 +28,13 @@ import com.github.pfichtner.espressomachine.emit.SerialEmitter;
  */
 public class AvrIntrinsics {
 
-    private final List<IntrinsicEmitter> emitters = List.of(new GpioEmitter(), new DelayEmitter(), new SerialEmitter());
+	private final List<IntrinsicEmitter> emitters = List.of(
+			new GpioEmitter(), 
+			new DelayEmitter(), 
+			new SerialEmitter(),
+			new RandomEmitter(), 
+			new JavaRandomEmitter(), 
+			new RandomBridgeEmitter());
 
     public boolean isIntrinsic(String className) {
         return emitters.stream().anyMatch(e -> e.canHandle(className));

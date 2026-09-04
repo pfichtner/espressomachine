@@ -27,6 +27,7 @@ import org.teavm.model.MethodDescriptor;
 import org.teavm.model.MethodHolder;
 import org.teavm.model.MethodReader;
 import org.teavm.model.MethodReference;
+import org.teavm.model.instructions.InvocationType;
 import org.teavm.model.Phi;
 import org.teavm.model.Program;
 import org.teavm.model.ReferenceCache;
@@ -204,15 +205,76 @@ public class IrDumper {
             // Using an actual (empty) program instead of null lets TeaVM inline and
             // eliminate trivial calls like Object.<init>() so they don't appear as
             // undefined symbols in the LLVM output.
-            return List.of((cls, ctx) -> {
-                if (LlvmModuleEmitter.isJavaLangObject(cls.getName())) {
-                    for (var method : cls.getMethods()) {
-                        if (method.getProgram() != null) {
+            //
+            // For java.util.Random: all methods are stubbed with return-0 (including
+            // next(int)), which means TeaVM constant-folds all Random calls to literal
+            // 0 before the emitter ever sees them.
+            //
+            // To intercept Random calls in user code, a SECOND transformer walks user
+            // classes and replaces java.util.Random.nextInt() / nextInt(int) /
+            // nextLong() invoke instructions with calls to RuntimeRandomBridge methods.
+            // The bridge methods read from a volatile field so the optimizer can't fold
+            // them; the emitter then replaces the bridge call with the AVR intrinsic.
+            return List.of(
+                // Transformer 1: JDK method stubs
+                (cls, ctx) -> {
+                    if (LlvmModuleEmitter.isJavaLangObject(cls.getName())) {
+                        for (var method : cls.getMethods()) {
+                            if (method.getProgram() == null) continue;
                             method.setProgram(makeReturnStub(method));
                         }
                     }
+                },
+                // Transformer 2: Replace java.util.Random invokes in user code
+                (cls, ctx) -> {
+                    if (LlvmModuleEmitter.isJavaLangObject(cls.getName())) return;
+                    for (var method : cls.getMethods()) {
+                        if (method.getProgram() == null) continue;
+                        replaceRandomInvokes(method.getProgram());
+                    }
                 }
-            });
+            );
+        }
+
+        /** Bridge class name for intercepted java.util.Random methods. */
+        private static final String BRIDGE_CLASS =
+                "com.github.pfichtner.espressomachine.emit.RuntimeRandomBridge";
+
+        /**
+         * Walk a program and replace {@code java.util.Random.nextInt()},
+         * {@code nextInt(int)}, and {@code nextLong()} invoke instructions
+         * with calls to {@link RuntimeRandomBridge} methods.
+         * The emitter intercepts those bridge calls and emits AVR intrinsics.
+         */
+        private static void replaceRandomInvokes(Program prog) {
+            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                BasicBlock bb = prog.basicBlockAt(bi);
+                if (bb == null) continue;
+                for (var it = bb.iterator(); it.hasNext(); ) {
+                    Instruction insn = it.next();
+                    if (!(insn instanceof InvokeInstruction inv)) continue;
+                    if (!"java.util.Random".equals(inv.getMethod().getClassName())) continue;
+                    String name = inv.getMethod().getName();
+                    switch (name) {
+                        case "nextInt" -> {
+                            if (inv.getArguments().isEmpty()) {
+                                inv.setMethod(new MethodReference(BRIDGE_CLASS,
+                                        org.teavm.model.MethodDescriptor.parse("randomNextInt()I")));
+                            } else {
+                                inv.setMethod(new MethodReference(BRIDGE_CLASS,
+                                        org.teavm.model.MethodDescriptor.parse("randomNextIntBound(I)I")));
+                            }
+                        }
+                        case "nextLong" -> {
+                            inv.setMethod(new MethodReference(BRIDGE_CLASS,
+                                    org.teavm.model.MethodDescriptor.parse("randomNextLong()J")));
+                        }
+                        case "next" -> {
+                            // next(int) is internal — already handled by stubs, skip
+                        }
+                    }
+                }
+            }
         }
 
         private static Program makeReturnStub(MethodHolder method) {
@@ -356,7 +418,8 @@ public class IrDumper {
         private void emitLlvm() throws IOException {
             System.out.println();
             System.out.println("=== Emitting LLVM IR → " + llvmOutputPath + " ===");
-            var moduleEmitter = new LlvmModuleEmitter(lastClasses, postOptPrograms, postOptMethods, rootClassName);
+            var moduleEmitter = new LlvmModuleEmitter(lastClasses, postOptPrograms, postOptMethods,
+                    preInliningPrograms, rootClassName);
             String llvm = moduleEmitter.emit();
             writeString(Path.of(llvmOutputPath), llvm);
             System.out.println("  Wrote " + llvm.length() + " chars to " + llvmOutputPath);

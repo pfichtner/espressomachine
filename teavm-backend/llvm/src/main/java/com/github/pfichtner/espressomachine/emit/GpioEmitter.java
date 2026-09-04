@@ -1,11 +1,17 @@
 package com.github.pfichtner.espressomachine.emit;
 
+import static com.github.pfichtner.espressomachine.emit.InvokeInstructions.isClassname;
+import static com.github.pfichtner.espressomachine.emit.InvokeInstructions.isMethodname;
+import static com.github.pfichtner.espressomachine.emit.InvokeInstructions.isUsedIn;
+import static com.github.pfichtner.espressomachine.emit.RegisterFile.DDRB;
+import static com.github.pfichtner.espressomachine.emit.RegisterFile.DDRD;
+import static com.github.pfichtner.espressomachine.emit.RegisterFile.PORTB;
+import static com.github.pfichtner.espressomachine.emit.RegisterFile.PORTD;
+
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-import org.teavm.model.BasicBlock;
-import org.teavm.model.Instruction;
 import org.teavm.model.Program;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.InvokeInstruction;
@@ -33,23 +39,21 @@ public class GpioEmitter implements IntrinsicEmitter {
 
     // ---- ATmega328P pin table ----
     private static final List<PinSpec> PIN_MAP = List.of(
-        new PinSpec( 0, RegisterFile.DDRD, RegisterFile.PORTD, 1   ),   // D0  = PD0
-        new PinSpec( 1, RegisterFile.DDRD, RegisterFile.PORTD, 2   ),   // D1  = PD1
-        new PinSpec( 2, RegisterFile.DDRD, RegisterFile.PORTD, 4   ),   // D2  = PD2
-        new PinSpec( 3, RegisterFile.DDRD, RegisterFile.PORTD, 8   ),   // D3  = PD3
-        new PinSpec( 4, RegisterFile.DDRD, RegisterFile.PORTD, 16  ),   // D4  = PD4
-        new PinSpec( 5, RegisterFile.DDRD, RegisterFile.PORTD, 32  ),   // D5  = PD5
-        new PinSpec( 6, RegisterFile.DDRD, RegisterFile.PORTD, 64  ),   // D6  = PD6
-        new PinSpec( 7, RegisterFile.DDRD, RegisterFile.PORTD, 128 ),   // D7  = PD7
-        new PinSpec( 8, RegisterFile.DDRB, RegisterFile.PORTB, 1   ),   // D8  = PB0
-        new PinSpec( 9, RegisterFile.DDRB, RegisterFile.PORTB, 2   ),   // D9  = PB1
-        new PinSpec(10, RegisterFile.DDRB, RegisterFile.PORTB, 4   ),   // D10 = PB2
-        new PinSpec(11, RegisterFile.DDRB, RegisterFile.PORTB, 8   ),   // D11 = PB3
-        new PinSpec(12, RegisterFile.DDRB, RegisterFile.PORTB, 16  ),   // D12 = PB4
-        new PinSpec(13, RegisterFile.DDRB, RegisterFile.PORTB, 32  )    // D13 = PB5  ← built-in LED
+        new PinSpec( 0, DDRD, PORTD, 1 << 0),   // D0  = PD0
+        new PinSpec( 1, DDRD, PORTD, 1 << 1),   // D1  = PD1
+        new PinSpec( 2, DDRD, PORTD, 1 << 2),   // D2  = PD2
+        new PinSpec( 3, DDRD, PORTD, 1 << 3),   // D3  = PD3
+        new PinSpec( 4, DDRD, PORTD, 1 << 4),   // D4  = PD4
+        new PinSpec( 5, DDRD, PORTD, 1 << 5),   // D5  = PD5
+        new PinSpec( 6, DDRD, PORTD, 1 << 6),   // D6  = PD6
+        new PinSpec( 7, DDRD, PORTD, 1 << 7),   // D7  = PD7
+        new PinSpec( 8, DDRB, PORTB, 1 << 0),   // D8  = PB0
+        new PinSpec( 9, DDRB, PORTB, 1 << 1),   // D9  = PB1
+        new PinSpec(10, DDRB, PORTB, 1 << 2),   // D10 = PB2
+        new PinSpec(11, DDRB, PORTB, 1 << 3),   // D11 = PB3
+        new PinSpec(12, DDRB, PORTB, 1 << 4),   // D12 = PB4
+        new PinSpec(13, DDRB, PORTB, 1 << 5)    // D13 = PB5  ← built-in LED
     );
-
-    public GpioEmitter() {}
 
     public boolean canHandle(String className) {
         return CLASS.equals(className);
@@ -88,20 +92,8 @@ public class GpioEmitter implements IntrinsicEmitter {
     }
 
     private boolean isAnalogUsedIn(Map<String, Program> programs) {
-        for (Program prog : programs.values()) {
-            if (prog == null) continue;
-            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
-                BasicBlock bb = prog.basicBlockAt(bi);
-                if (bb == null) continue;
-                for (Instruction insn : bb) {
-                    if (insn instanceof InvokeInstruction inv && canHandle(inv.getMethod().getClassName())) {
-                        String name = inv.getMethod().getName();
-                        if ("analogRead".equals(name) || "analogWrite".equals(name)) return true;
-                    }
-                }
-            }
-        }
-        return false;
+		return isUsedIn(programs, isClassname(CLASS)
+				.and(isMethodname("analogRead").or(isMethodname("analogWrite"))));
     }
 
     // ---- Internal helpers ----
@@ -168,22 +160,7 @@ public class GpioEmitter implements IntrinsicEmitter {
                 args.stream().map(resolveVar).toArray());
     }
 
-    private void emitFallback(LlvmWriter writer, InvokeInstruction insn,
-                              List<? extends Variable> args,
-                              Function<Variable, String> resolveVar) {
-        String fqn = insn.getMethod().getClassName();
-        String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
-        writer.callVoid("__espressomachine_" + simpleName.toLowerCase() + "_" + insn.getMethod().getName(),
-                args.stream().map(resolveVar).toArray());
-    }
-
-    Integer constInt(Variable v, Map<Integer, String> constVars) {
-        String s = constVars.get(v.getIndex());
-        if (s == null) return null;
-        try { return Integer.parseInt(s); } catch (NumberFormatException e) { return null; }
-    }
-
-    PinSpec pinMap(int pin) {
+    private PinSpec pinMap(int pin) {
         return PIN_MAP.stream().filter(pm -> pm.pin() == pin).findFirst().orElse(null);
     }
 }
