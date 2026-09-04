@@ -34,6 +34,7 @@ class LlvmModuleEmitter {
 
     private static final String JAVA_LANG_ENUM = Enum.class.getName();
 
+    final AvrIntrinsics intrinsics = new AvrIntrinsics();
     final ListableClassHolderSource classes;
     // postOptPrograms/Methods come from afterOptimizations callbacks
     private final LinkedHashMap<String, Program> postOptPrograms;
@@ -107,8 +108,8 @@ class LlvmModuleEmitter {
         emitStaticFields(out);
 
         // 2b. AVR intrinsic runtime declarations (serial only when the program uses it)
-        out.append(AvrIntrinsics.runtimeDeclarations());
-        if (usesSerial()) out.append(AvrIntrinsics.serialDeclarations());
+        out.append(intrinsics.runtimeDeclarations());
+        if (usesSerial()) out.append(intrinsics.serialDeclarations());
         out.append("\n");
 
         // 3. External declarations (java.lang.Object methods etc.)

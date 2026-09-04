@@ -16,7 +16,7 @@ import org.teavm.model.instructions.InvokeInstruction;
  * {@code char}/{@code int} overloads are typically inlined by TeaVM into
  * {@code write()} calls.
  */
-public class SerialEmitter {
+public class SerialEmitter implements IntrinsicEmitter {
 
     public static final String CLASS = "com.github.pfichtner.espressomachine.api.Serial";
 
@@ -27,9 +27,9 @@ public class SerialEmitter {
     private static final int CR = 13;          // carriage return
     private static final int LF = 10;          // line feed
 
-    private SerialEmitter() {}
+    public SerialEmitter() {}
 
-    public static boolean canHandle(String className) {
+    public boolean canHandle(String className) {
         return CLASS.equals(className);
     }
 
@@ -38,10 +38,10 @@ public class SerialEmitter {
      *
      * @return updated tmpCounter
      */
-    public static int emit(LlvmWriter w, InvokeInstruction insn,
-                           Map<Integer, String> constVars,
-                           Function<Variable, String> resolveVar,
-                           Map<Integer, String> objectRefs) {
+    public int emit(LlvmWriter w, InvokeInstruction insn,
+                    Map<Integer, String> constVars,
+                    Function<Variable, String> resolveVar,
+                    Map<Integer, String> objectRefs) {
         String method = insn.getMethod().getName();
         List<? extends Variable> args = insn.getArguments();
         switch (method) {
@@ -56,7 +56,7 @@ public class SerialEmitter {
         return w.tmpCounter();
     }
 
-    public static String declarations() {
+    public String declarations() {
         return """
                 declare void @__espressomachine_serial_begin(i32 %baud)
                 declare void @__espressomachine_serial_write(i32 %b)
@@ -67,7 +67,7 @@ public class SerialEmitter {
 
     // ---- Internal helpers ----
 
-    private static void emitBegin(LlvmWriter w, List<? extends Variable> args,
+    private void emitBegin(LlvmWriter w, List<? extends Variable> args,
                                   Map<Integer, String> constVars,
                                   Function<Variable, String> resolveVar) {
         Integer baud = constInt(args.get(0), constVars);
@@ -82,12 +82,12 @@ public class SerialEmitter {
         }
     }
 
-    private static void emitWrite(LlvmWriter w, List<? extends Variable> args,
+    private void emitWrite(LlvmWriter w, List<? extends Variable> args,
                                   Function<Variable, String> resolveVar) {
         w.callVoid("__espressomachine_serial_write", resolveVar.apply(args.get(0)));
     }
 
-    private static void emitAvailable(LlvmWriter w, InvokeInstruction insn,
+    private void emitAvailable(LlvmWriter w, InvokeInstruction insn,
                                       Function<Variable, String> resolveVar) {
         // Read RXC0 (bit 7 = 0x80) from UCSR0A; return 1 if set, 0 otherwise.
         String t0 = w.temp();
@@ -101,7 +101,7 @@ public class SerialEmitter {
         }
     }
 
-    private static void emitRead(LlvmWriter w, InvokeInstruction insn,
+    private void emitRead(LlvmWriter w, InvokeInstruction insn,
                                  Function<Variable, String> resolveVar) {
         // Read UDR0 and zero-extend to i32; call available() first.
         String t0 = w.temp();
@@ -111,7 +111,7 @@ public class SerialEmitter {
         }
     }
 
-    private static void emitPrintln(LlvmWriter w, List<? extends Variable> args,
+    private void emitPrintln(LlvmWriter w, List<? extends Variable> args,
                                     InvokeInstruction insn,
                                     Map<Integer, String> objectRefs,
                                     Function<Variable, String> resolveVar) {
@@ -126,7 +126,7 @@ public class SerialEmitter {
         w.callVoid("__espressomachine_serial_write", LF);
     }
 
-    private static void emitPrint(LlvmWriter w, List<? extends Variable> args,
+    private void emitPrint(LlvmWriter w, List<? extends Variable> args,
                                   InvokeInstruction insn,
                                   Map<Integer, String> objectRefs,
                                   Function<Variable, String> resolveVar) {
@@ -150,7 +150,7 @@ public class SerialEmitter {
         w.callVoid("__espressomachine_serial_print_int", resolveVar.apply(arg));
     }
 
-    private static void emitFallback(LlvmWriter w, InvokeInstruction insn,
+    private void emitFallback(LlvmWriter w, InvokeInstruction insn,
                                      List<? extends Variable> args,
                                      Function<Variable, String> resolveVar) {
         String fqn = insn.getMethod().getClassName();
@@ -159,7 +159,7 @@ public class SerialEmitter {
                 args.stream().map(resolveVar).toArray());
     }
 
-    static Integer constInt(Variable v, Map<Integer, String> constVars) {
+    Integer constInt(Variable v, Map<Integer, String> constVars) {
         String s = constVars.get(v.getIndex());
         if (s == null) return null;
         try { return Integer.parseInt(s); } catch (NumberFormatException e) { return null; }

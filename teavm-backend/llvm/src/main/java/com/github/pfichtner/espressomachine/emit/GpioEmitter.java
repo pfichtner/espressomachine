@@ -14,7 +14,7 @@ import org.teavm.model.instructions.InvokeInstruction;
  * register is manipulated directly; otherwise the call falls back to an external
  * runtime declaration ({@code @__espressomachine_gpio_*}).
  */
-public class GpioEmitter {
+public class GpioEmitter implements IntrinsicEmitter {
 
     public static final String CLASS = "com.github.pfichtner.espressomachine.api.GPIO";
 
@@ -46,9 +46,9 @@ public class GpioEmitter {
         new PinSpec(13, RegisterFile.DDRB, RegisterFile.PORTB, 32  )    // D13 = PB5  ← built-in LED
     );
 
-    private GpioEmitter() {}
+    public GpioEmitter() {}
 
-    public static boolean canHandle(String className) {
+    public boolean canHandle(String className) {
         return CLASS.equals(className);
     }
 
@@ -57,10 +57,10 @@ public class GpioEmitter {
      *
      * @return updated tmpCounter
      */
-    public static int emit(LlvmWriter w, InvokeInstruction insn,
-                           Map<Integer, String> constVars,
-                           Function<Variable, String> resolveVar,
-                           Map<Integer, String> objectRefs) {
+    public int emit(LlvmWriter w, InvokeInstruction insn,
+                    Map<Integer, String> constVars,
+                    Function<Variable, String> resolveVar,
+                    Map<Integer, String> objectRefs) {
         String method = insn.getMethod().getName();
         List<? extends Variable> args = insn.getArguments();
         switch (method) {
@@ -71,7 +71,7 @@ public class GpioEmitter {
         return w.tmpCounter();
     }
 
-    public static String declarations() {
+    public String declarations() {
         return """
                 declare void @__espressomachine_gpio_pinmode(i32 %pin, i32 %mode)
                 declare void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value)
@@ -80,9 +80,9 @@ public class GpioEmitter {
 
     // ---- Internal helpers ----
 
-    private static void emitPinMode(LlvmWriter w, List<? extends Variable> args,
-                                    Map<Integer, String> constVars,
-                                    Function<Variable, String> resolveVar) {
+    private void emitPinMode(LlvmWriter w, List<? extends Variable> args,
+                             Map<Integer, String> constVars,
+                             Function<Variable, String> resolveVar) {
         Integer pin  = constInt(args.get(0), constVars);
         Integer mode = constInt(args.get(1), constVars);
 
@@ -108,9 +108,9 @@ public class GpioEmitter {
                 resolveVar.apply(args.get(0)), resolveVar.apply(args.get(1)));
     }
 
-    private static void emitDigitalWrite(LlvmWriter w, List<? extends Variable> args,
-                                         Map<Integer, String> constVars,
-                                         Function<Variable, String> resolveVar) {
+    private void emitDigitalWrite(LlvmWriter w, List<? extends Variable> args,
+                                  Map<Integer, String> constVars,
+                                  Function<Variable, String> resolveVar) {
         Integer pin   = constInt(args.get(0), constVars);
         Integer value = constInt(args.get(1), constVars);
 
@@ -134,22 +134,22 @@ public class GpioEmitter {
                 resolveVar.apply(args.get(0)), resolveVar.apply(args.get(1)));
     }
 
-    private static void emitFallback(LlvmWriter w, InvokeInstruction insn,
-                                     List<? extends Variable> args,
-                                     Function<Variable, String> resolveVar) {
+    private void emitFallback(LlvmWriter w, InvokeInstruction insn,
+                              List<? extends Variable> args,
+                              Function<Variable, String> resolveVar) {
         String fqn = insn.getMethod().getClassName();
         String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
         w.callVoid("__espressomachine_" + simpleName.toLowerCase() + "_" + insn.getMethod().getName(),
                 args.stream().map(resolveVar).toArray());
     }
 
-    static Integer constInt(Variable v, Map<Integer, String> constVars) {
+    Integer constInt(Variable v, Map<Integer, String> constVars) {
         String s = constVars.get(v.getIndex());
         if (s == null) return null;
         try { return Integer.parseInt(s); } catch (NumberFormatException e) { return null; }
     }
 
-    static PinSpec pinMap(int pin) {
+    PinSpec pinMap(int pin) {
         for (PinSpec pm : PIN_MAP) {
             if (pm.pin() == pin) return pm;
         }

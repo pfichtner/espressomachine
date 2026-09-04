@@ -9,6 +9,7 @@ import org.teavm.model.instructions.InvokeInstruction;
 
 import com.github.pfichtner.espressomachine.emit.DelayEmitter;
 import com.github.pfichtner.espressomachine.emit.GpioEmitter;
+import com.github.pfichtner.espressomachine.emit.IntrinsicEmitter;
 import com.github.pfichtner.espressomachine.emit.LlvmWriter;
 import com.github.pfichtner.espressomachine.emit.SerialEmitter;
 
@@ -25,10 +26,14 @@ public class AvrIntrinsics {
     public static final String GPIO_CLASS   = GpioEmitter.CLASS;
     public static final String DELAY_CLASS  = DelayEmitter.CLASS;
     public static final String SERIAL_CLASS = SerialEmitter.CLASS;
-    public static final List<String> ALL_INTRINSICS = List.of(GPIO_CLASS, DELAY_CLASS, SERIAL_CLASS);
 
-    public static boolean isIntrinsic(InvokeInstruction insn) {
-        return ALL_INTRINSICS.contains(insn.getMethod().getClassName());
+    private final IntrinsicEmitter gpio   = new GpioEmitter();
+    private final IntrinsicEmitter delay  = new DelayEmitter();
+    private final IntrinsicEmitter serial = new SerialEmitter();
+    private final List<IntrinsicEmitter> emitters = List.of(gpio, delay, serial);
+
+    public boolean isIntrinsic(InvokeInstruction insn) {
+        return emitters.stream().anyMatch(e -> e.canHandle(insn.getMethod().getClassName()));
     }
 
     /**
@@ -36,29 +41,24 @@ public class AvrIntrinsics {
      *
      * @return updated tmpCounter
      */
-    public static int emit(StringBuilder out, InvokeInstruction insn,
+    public int emit(StringBuilder out, InvokeInstruction insn,
                     Map<Integer, String> constVars, int tmpCounter,
                     Function<Variable, String> resolveVar,
                     Map<Integer, String> objectRefs) {
         LlvmWriter w = new LlvmWriter(out, tmpCounter);
         String cls = insn.getMethod().getClassName();
-        if (GpioEmitter.canHandle(cls)) {
-            return GpioEmitter.emit(w, insn, constVars, resolveVar, objectRefs);
-        }
-        if (DelayEmitter.canHandle(cls)) {
-            return DelayEmitter.emit(w, insn, constVars, resolveVar, objectRefs);
-        }
-        if (SerialEmitter.canHandle(cls)) {
-            return SerialEmitter.emit(w, insn, constVars, resolveVar, objectRefs);
-        }
-        return tmpCounter;
+        return emitters.stream()
+                .filter(e -> e.canHandle(cls))
+                .findFirst()
+                .map(e -> e.emit(w, insn, constVars, resolveVar, objectRefs))
+                .orElse(tmpCounter);
     }
 
-    public static String runtimeDeclarations() {
-        return GpioEmitter.declarations() + DelayEmitter.declarations();
+    public String runtimeDeclarations() {
+        return gpio.declarations() + delay.declarations();
     }
 
-    public static String serialDeclarations() {
-        return SerialEmitter.declarations();
+    public String serialDeclarations() {
+        return serial.declarations();
     }
 }

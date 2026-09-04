@@ -17,13 +17,13 @@ import org.teavm.model.instructions.InvokeInstruction;
  * {@code __espressomachine_delay_ms}; non-constant units fall back to a runtime
  * {@code __espressomachine_delay_time} call.
  */
-public class DelayEmitter {
+public class DelayEmitter implements IntrinsicEmitter {
 
     public static final String CLASS = "com.github.pfichtner.espressomachine.api.Delay";
 
-    private DelayEmitter() {}
+    public DelayEmitter() {}
 
-    public static boolean canHandle(String className) {
+    public boolean canHandle(String className) {
         return CLASS.equals(className);
     }
 
@@ -32,10 +32,10 @@ public class DelayEmitter {
      *
      * @return updated tmpCounter
      */
-    public static int emit(LlvmWriter w, InvokeInstruction insn,
-                           Map<Integer, String> constVars,
-                           Function<Variable, String> resolveVar,
-                           Map<Integer, String> objectRefs) {
+    public int emit(LlvmWriter w, InvokeInstruction insn,
+                    Map<Integer, String> constVars,
+                    Function<Variable, String> resolveVar,
+                    Map<Integer, String> objectRefs) {
         String method = insn.getMethod().getName();
         List<? extends Variable> args = insn.getArguments();
         switch (method) {
@@ -46,7 +46,7 @@ public class DelayEmitter {
         return w.tmpCounter();
     }
 
-    public static String declarations() {
+    public String declarations() {
         return """
                 declare void @__espressomachine_delay_ms(i32 %ms)
                 """;
@@ -54,15 +54,15 @@ public class DelayEmitter {
 
     // ---- Internal helpers ----
 
-    private static void emitMs(LlvmWriter w, List<? extends Variable> args,
-                               Function<Variable, String> resolveVar) {
+    private void emitMs(LlvmWriter w, List<? extends Variable> args,
+                        Function<Variable, String> resolveVar) {
         w.callVoid("__espressomachine_delay_ms", resolveVar.apply(args.get(0)));
     }
 
-    private static void emitTime(LlvmWriter w, List<? extends Variable> args,
-                                 Map<Integer, String> constVars,
-                                 Map<Integer, String> objectRefs,
-                                 Function<Variable, String> resolveVar) {
+    private void emitTime(LlvmWriter w, List<? extends Variable> args,
+                          Map<Integer, String> constVars,
+                          Map<Integer, String> objectRefs,
+                          Function<Variable, String> resolveVar) {
         TimeUnit tu = null;
         if (args.size() > 1) {
             String unitGlobal = objectRefs.get(args.get(1).getIndex());
@@ -107,16 +107,16 @@ public class DelayEmitter {
         w.callVoid("__espressomachine_delay_ms", tmp);
     }
 
-    private static void emitFallback(LlvmWriter w, InvokeInstruction insn,
-                                     List<? extends Variable> args,
-                                     Function<Variable, String> resolveVar) {
+    private void emitFallback(LlvmWriter w, InvokeInstruction insn,
+                              List<? extends Variable> args,
+                              Function<Variable, String> resolveVar) {
         String fqn = insn.getMethod().getClassName();
         String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
         w.callVoid("__espressomachine_" + simpleName.toLowerCase() + "_" + insn.getMethod().getName(),
                 args.stream().map(resolveVar).toArray());
     }
 
-    static Integer constInt(Variable v, Map<Integer, String> constVars) {
+    Integer constInt(Variable v, Map<Integer, String> constVars) {
         String s = constVars.get(v.getIndex());
         if (s == null) return null;
         try { return Integer.parseInt(s); } catch (NumberFormatException e) { return null; }
