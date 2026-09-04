@@ -220,6 +220,10 @@ run_ll_test "java-math" \
     "examples/java-math/target/classes:$API_CLASSES" \
     "JavaMath"
 
+run_ll_test "digitalread" \
+    "examples/digitalread/target/classes:$API_CLASSES" \
+    "DigitalRead"
+
 # ------------------------------------------------------------------
 # System integration test (requires Docker + Node.js + AVR toolchain)
 # ------------------------------------------------------------------
@@ -272,6 +276,19 @@ if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-analog" ]]; th
     if [[ "$FILTER" == "systemtest-analog" || -z "$FILTER" ]]; then
         echo "[systemtest-analog]"
         if bash tests/systemtest-analog.sh; then
+            echo "  PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "  FAIL"
+            FAIL=$((FAIL + 1))
+        fi
+    fi
+fi
+
+if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-digitalread" ]]; then
+    if [[ "$FILTER" == "systemtest-digitalread" || -z "$FILTER" ]]; then
+        echo "[systemtest-digitalread]"
+        if bash tests/systemtest-digitalread.sh; then
             echo "  PASS"
             PASS=$((PASS + 1))
         else

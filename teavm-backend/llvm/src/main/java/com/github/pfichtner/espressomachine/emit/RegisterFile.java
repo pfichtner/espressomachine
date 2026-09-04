@@ -10,7 +10,7 @@ public enum RegisterFile {
     // ---- GPIO data / direction registers ----
     DDRB(0x24), PORTB(0x25), PINB(0x23),
     DDRC(0x27), PORTC(0x28),
-    DDRD(0x2A), PORTD(0x2B),
+    DDRD(0x2A), PORTD(0x2B), PIND(0x29),
 
     // ---- UART (USART0) ----
     UCSR0A(192),  // 0xC0  status register (RXC0 = receives data)
