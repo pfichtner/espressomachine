@@ -33,7 +33,7 @@ class Blink {
 espressomachine build Blink.class --target atmega328p
 ```
 
-→ `build/Blink.hex` — **332 bytes** of AVR machine code, ready to flash.
+→ `build/Blink.hex` — **736 bytes** of AVR machine code, ready to flash.
 
 ### Entry points
 
