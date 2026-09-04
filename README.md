@@ -147,7 +147,7 @@ espressomachine flash build/Blink.hex --port /dev/ttyUSB0
 
 ## Running with Docker
 
-No local toolchain required — the image bundles Java, Maven, LLVM 18, and the AVR binutils.
+No local toolchain required — the image bundles a JRE, LLVM 18, and the AVR binutils.
 
 ```bash
 # Build the image
