@@ -215,6 +215,11 @@ run_ll_test "java-random" \
     "examples/java-random/target/classes:$API_CLASSES" \
     "JavaRandom"
 
+# java.lang.Math: min/max/abs lowered to LLVM intrinsics, pow/sqrt to external calls
+run_ll_test "java-math" \
+    "examples/java-math/target/classes:$API_CLASSES" \
+    "JavaMath"
+
 # ------------------------------------------------------------------
 # System integration test (requires Docker + Node.js + AVR toolchain)
 # ------------------------------------------------------------------

@@ -55,5 +55,6 @@
         <module>pwm-fade</module>
         <module>random</module>
         <module>java-random</module>
+        <module>java-math</module>
     </modules>
 </project>
