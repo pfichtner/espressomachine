@@ -98,13 +98,19 @@ done
 echo "    WebSocket endpoint is ready."
 
 # ---------------------------------------------------------------------------
-# Phase A: set pin 2 HIGH → expect pin 13 HIGH
+# Phase A: subscribe first, then inject pin 2 HIGH → expect pin 13 HIGH
+#
+# Subscribe before injecting so we don't miss the LOW→HIGH transition:
+# loop() runs without delay so pin 13 can settle before we subscribe if we
+# inject first.  A 0.5 s pause after subscribing lets virtualavr register
+# the subscription before the injection triggers a pin change.
 # ---------------------------------------------------------------------------
-echo "[4/6] Setting pin $BTN_PIN HIGH → expecting pin $LED_PIN HIGH..."
+echo "[4/6] Subscribing to pin $LED_PIN, then setting pin $BTN_PIN HIGH → expecting pin $LED_PIN HIGH..."
 pin13_high=$(
     {
-        printf '{"type":"pinState","pin":"%s","state":true}\n'    "$BTN_PIN"
         printf '{"type":"pinMode","pin":"%s","mode":"digital"}\n' "$LED_PIN"
+        sleep 0.5
+        printf '{"type":"pinState","pin":"%s","state":true}\n'    "$BTN_PIN"
         sleep "$WAIT_TIMEOUT"
     } | websocat "$WS_URL" 2>/dev/null \
       | jq -rc --arg p "$LED_PIN" \
@@ -119,13 +125,17 @@ fi
 echo "    Phase A passed: pin $LED_PIN went HIGH ($pin13_high observations)."
 
 # ---------------------------------------------------------------------------
-# Phase B: set pin 2 LOW → expect pin 13 LOW
+# Phase B: inject pin 2 LOW → expect pin 13 LOW
+#
+# Pin 13 is currently HIGH from Phase A; subscribe first so we catch
+# the HIGH→LOW edge when we drive pin 2 LOW.
 # ---------------------------------------------------------------------------
-echo "[5/6] Setting pin $BTN_PIN LOW → expecting pin $LED_PIN LOW..."
+echo "[5/6] Subscribing to pin $LED_PIN, then setting pin $BTN_PIN LOW → expecting pin $LED_PIN LOW..."
 pin13_low=$(
     {
-        printf '{"type":"pinState","pin":"%s","state":false}\n'   "$BTN_PIN"
         printf '{"type":"pinMode","pin":"%s","mode":"digital"}\n' "$LED_PIN"
+        sleep 0.5
+        printf '{"type":"pinState","pin":"%s","state":false}\n'   "$BTN_PIN"
         sleep "$WAIT_TIMEOUT"
     } | websocat "$WS_URL" 2>/dev/null \
       | jq -rc --arg p "$LED_PIN" \
