@@ -111,6 +111,11 @@ public final class LlvmWriter {
         line(dst + " = zext i8 " + src + " to i32");
     }
 
+    /** {@code dst = zext i32 src to i64} */
+    public void zext32to64(String dst, String src) {
+        line(dst + " = zext i32 " + src + " to i64");
+    }
+
     /** {@code call void @fn(i32 a, i32 b, ...)} */
     public void callVoid(String fn, Object... args) {
         String argList = Arrays.stream(args).map(arg -> "i32 " + arg).collect(Collectors.joining(", "));

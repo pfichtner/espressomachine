@@ -205,6 +205,16 @@ run_ll_test "pwm-fade" \
     "examples/pwm-fade/target/classes:$API_CLASSES" \
     "PwmFade"
 
+# Random: LCG-based random number generation
+run_ll_test "random" \
+    "examples/random/target/classes:$API_CLASSES" \
+    "RandomExample"
+
+# java.util.Random: intercepted by RandomEmitter, lowered to 48-bit LCG runtime
+run_ll_test "java-random" \
+    "examples/java-random/target/classes:$API_CLASSES" \
+    "JavaRandom"
+
 # ------------------------------------------------------------------
 # System integration test (requires Docker + Node.js + AVR toolchain)
 # ------------------------------------------------------------------

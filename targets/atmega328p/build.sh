@@ -61,7 +61,7 @@ if [[ ! -f "$TOOL_JAR" ]]; then
     (cd "$REPO_ROOT/teavm-backend/llvm" && mvn package -q)
 fi
 
-echo "[1/6] TeaVM → LLVM IR..."
+echo "[1/8] TeaVM → LLVM IR..."
 # Add runtime/api to classpath so TeaVM can resolve GPIO/Delay class definitions
 TEAVM_CP="$CLASSES_DIR:$RUNTIME_API"
 # Compile runtime/api stubs to classes if not already done
@@ -75,38 +75,50 @@ TEAVM_CP="$CLASSES_DIR:$API_CLASSES"
 java -jar "$TOOL_JAR" "$TEAVM_CP" "$ENTRY_CLASS" "$OUTPUT_LL"
 
 # ---- Step 2: assemble startup.S (substitute entry class name) ----
-echo "[2/6] Assembling startup.S (entry: ${ENTRY_CLASS}_main)..."
+echo "[2/8] Assembling startup.S (entry: ${ENTRY_CLASS}_main)..."
 CALIBRATED_STARTUP="$BUILD_DIR/startup_${ENTRY_CLASS}.S"
 sed "s/__ENTRY_CLASS__/${ENTRY_CLASS}/g" "$SCRIPT_DIR/startup.S" > "$CALIBRATED_STARTUP"
 avr-as -mmcu=$MCU "$CALIBRATED_STARTUP" -o "$BUILD_DIR/startup.o"
 
 # ---- Step 3: compile user LLVM IR ----
-echo "[3/6] Compiling ${ENTRY_CLASS}.ll → ${ENTRY_CLASS}.o ..."
+echo "[3/8] Compiling ${ENTRY_CLASS}.ll → ${ENTRY_CLASS}.o ..."
 llc-18 -march=avr -mcpu=$MCU -filetype=obj \
     -o "$BUILD_DIR/${ENTRY_CLASS}.o" \
     "$OUTPUT_LL"
 
 # ---- Step 4: compile gpio.ll runtime ----
-echo "[4/6] Compiling gpio.ll → gpio.o ..."
+echo "[4/8] Compiling gpio.ll → gpio.o ..."
 llc-18 -march=avr -mcpu=$MCU -filetype=obj \
     -o "$BUILD_DIR/gpio.o" \
     "$TARGET_DIR/gpio.ll"
 
 # ---- Step 5: generate and compile calibrated delay.ll ----
-echo "[5/6] Generating delay.ll (DELAY_ITERS=$DELAY_ITERS) → delay.o ..."
+echo "[5/8] Generating delay.ll (DELAY_ITERS=$DELAY_ITERS) → delay.o ..."
 CALIBRATED_DELAY="$BUILD_DIR/delay_${DELAY_ITERS}.ll"
 sed "s/__DELAY_ITERS__/$DELAY_ITERS/g" "$TARGET_DIR/delay.ll" > "$CALIBRATED_DELAY"
 llc-18 -march=avr -mcpu=$MCU -filetype=obj \
     -o "$BUILD_DIR/delay.o" \
     "$CALIBRATED_DELAY"
 
-# ---- Step 6: link ----
-echo "[6/6] Linking → ${ENTRY_CLASS}.elf ..."
+# ---- Step 6: compile random.ll runtime ----
+echo "[6/8] Compiling random.ll → random.o ..."
+llc-18 -march=avr -mcpu=$MCU -filetype=obj \
+    -o "$BUILD_DIR/random.o" \
+    "$TARGET_DIR/random.ll"
+
+# ---- Step 6b: compile random.S (java.util.Random 48-bit LCG) ----
+echo "[6b/8] Assembling random.S → random_asm.o ..."
+avr-as -mmcu=$MCU "$TARGET_DIR/random.S" -o "$BUILD_DIR/random_asm.o"
+
+# ---- Step 7: link ----
+echo "[7/8] Linking → ${ENTRY_CLASS}.elf ..."
 avr-ld -T "$SCRIPT_DIR/linker.ld" \
     "$BUILD_DIR/startup.o" \
     "$BUILD_DIR/${ENTRY_CLASS}.o" \
     "$BUILD_DIR/gpio.o" \
     "$BUILD_DIR/delay.o" \
+    "$BUILD_DIR/random.o" \
+    "$BUILD_DIR/random_asm.o" \
     -o "$BUILD_DIR/${ENTRY_CLASS}.elf"
 
 avr-objcopy -O ihex -R .eeprom \

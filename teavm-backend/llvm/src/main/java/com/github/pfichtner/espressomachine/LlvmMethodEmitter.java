@@ -352,15 +352,23 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     @Override
     public void visit(InvokeInstruction insn) {
+        String calledClass  = insn.getMethod().getClassName();
+        String calledMethod = insn.getMethod().getName();
+
+        // Skip calls to JDK/internal classes — they are stubbed with return-0 by
+        // the transformer and have no meaningful body on the embedded target.
+        // This must come BEFORE the intrinsic check so that JDK class constructors
+        // like java.util.Random.<init>() are skipped rather than intercepted.
+        if (LlvmModuleEmitter.isJavaLangObject(calledClass)) {
+            return;
+        }
+
         // Check for embedded intrinsics (GPIO, Delay) before regular call emission.
         if (module.intrinsics.isIntrinsic(insn)) {
             tmpCounter = module.intrinsics.emit(out, insn, varLiteral, tmpCounter,
                     this::resolveVar, staticObjectRef);
             return;
         }
-
-        String calledClass  = insn.getMethod().getClassName();
-        String calledMethod = insn.getMethod().getName();
 
         // ---- Enum <clinit> intercepts ----
         if (inEnumClinit) {

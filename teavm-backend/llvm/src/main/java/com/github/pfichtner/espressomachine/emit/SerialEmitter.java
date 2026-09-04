@@ -1,11 +1,11 @@
 package com.github.pfichtner.espressomachine.emit;
 
+import static com.github.pfichtner.espressomachine.emit.InvokeInstructions.isUsedIn;
+
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-import org.teavm.model.BasicBlock;
-import org.teavm.model.Instruction;
 import org.teavm.model.Program;
 import org.teavm.model.ValueType;
 import org.teavm.model.Variable;
@@ -29,8 +29,6 @@ public class SerialEmitter implements IntrinsicEmitter {
     private static final int FRAME_8N1  = 6;   // UCSR0C = 8 data bits, no parity, 1 stop
     private static final int CR = 13;          // carriage return
     private static final int LF = 10;          // line feed
-
-    public SerialEmitter() {}
 
     public boolean canHandle(String className) {
         return CLASS.equals(className);
@@ -60,29 +58,13 @@ public class SerialEmitter implements IntrinsicEmitter {
     }
 
     public String declarations(Map<String, Program> programs) {
-        if (!isUsedIn(programs)) return "";
+        if (!isUsedIn(programs, InvokeInstructions.isClassname(CLASS))) return "";
         return """
                 declare void @__espressomachine_serial_begin(i32 %baud)
                 declare void @__espressomachine_serial_write(i32 %b)
                 declare void @__espressomachine_serial_print_int(i32 %n)
                 declare void @__espressomachine_serial_print_str(ptr %s)
                 """;
-    }
-
-    private boolean isUsedIn(Map<String, Program> programs) {
-        for (Program prog : programs.values()) {
-            if (prog == null) continue;
-            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
-                BasicBlock bb = prog.basicBlockAt(bi);
-                if (bb == null) continue;
-                for (Instruction insn : bb) {
-                    if (insn instanceof InvokeInstruction inv && canHandle(inv.getMethod().getClassName())) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
     }
 
     // ---- Internal helpers ----
@@ -166,18 +148,4 @@ public class SerialEmitter implements IntrinsicEmitter {
         writer.callVoid("__espressomachine_serial_print_int", resolveVar.apply(arg));
     }
 
-    private void emitFallback(LlvmWriter writer, InvokeInstruction insn,
-                                     List<? extends Variable> args,
-                                     Function<Variable, String> resolveVar) {
-        String fqn = insn.getMethod().getClassName();
-        String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
-        writer.callVoid("__espressomachine_" + simpleName.toLowerCase() + "_" + insn.getMethod().getName(),
-                args.stream().map(resolveVar).toArray());
-    }
-
-    Integer constInt(Variable variable, Map<Integer, String> constVars) {
-        String s = constVars.get(variable.getIndex());
-        if (s == null) return null;
-        try { return Integer.parseInt(s); } catch (NumberFormatException e) { return null; }
-    }
 }
