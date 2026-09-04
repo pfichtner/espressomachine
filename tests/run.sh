@@ -224,6 +224,11 @@ run_ll_test "digitalread" \
     "examples/digitalread/target/classes:$API_CLASSES" \
     "DigitalRead"
 
+# map() and constrain() — pure Java, inlined by TeaVM, no AVR intrinsics
+run_ll_test "functions" \
+    "examples/functions/target/classes:$API_CLASSES" \
+    "FunctionsExample"
+
 # ------------------------------------------------------------------
 # System integration test (requires Docker + Node.js + AVR toolchain)
 # ------------------------------------------------------------------
