@@ -7,6 +7,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.teavm.model.BasicBlock;
 import org.teavm.model.ClassHolder;
@@ -67,12 +68,12 @@ class LlvmModuleEmitter {
 
     private void buildFieldMaps() {
         // Detect enum classes first so field indexing is correct.
-        for (String name : classes.getClassNames()) {
-            ClassHolder cls = classes.get(name);
-            if (cls != null && JAVA_LANG_ENUM.equals(cls.getParent())) {
-                enumClasses.add(name);
-            }
-        }
+        classes.getClassNames().stream()
+            .filter(name -> {
+                ClassHolder cls = classes.get(name);
+                return cls != null && JAVA_LANG_ENUM.equals(cls.getParent());
+            })
+            .forEach(enumClasses::add);
 
         for (String name : classes.getClassNames()) {
             ClassHolder cls = classes.get(name);
@@ -137,11 +138,9 @@ class LlvmModuleEmitter {
         }
 
         // Emit external declarations for callee methods not defined here.
-        for (String callee : called) {
-            if (!defined.contains(callee)) {
-                out.append("declare void @").append(callee).append("(...)\n");
-            }
-        }
+        called.stream()
+            .filter(callee -> !defined.contains(callee))
+            .forEach(callee -> out.append("declare void @").append(callee).append("(...)\n"));
         if (!called.isEmpty()) out.append("\n");
 
         out.append(methods);
@@ -156,9 +155,7 @@ class LlvmModuleEmitter {
         appendSyntheticMain(out);
         if (!jdkGlobalStubs.isEmpty()) {
             out.append("\n");
-            for (String stub : jdkGlobalStubs) {
-                out.append(stub).append(" = global i8 0\n");
-            }
+            jdkGlobalStubs.forEach(stub -> out.append(stub).append(" = global i8 0\n"));
         }
         return out.toString();
     }
@@ -179,13 +176,13 @@ class LlvmModuleEmitter {
 
     private void emitStringGlobals(StringBuilder out) {
         if (stringGlobals.isEmpty()) return;
-        for (var e : stringGlobals.entrySet()) {
-            String lit = escapeLlvmCString(e.getKey());
-            out.append(e.getValue())
+        stringGlobals.forEach((key, value) -> {
+            String lit = escapeLlvmCString(key);
+            out.append(value)
                .append(" = private unnamed_addr constant [")
                .append(lit.length() + 1).append(" x i8] c\"")
                .append(lit).append("\\00\"\n");
-        }
+        });
         out.append("\n");
     }
 
@@ -234,15 +231,14 @@ class LlvmModuleEmitter {
                 // Enum subclass: start with inherited Enum fields, then own fields.
                 llvmFields.add("ptr");  // name (null on embedded)
                 llvmFields.add("i32");  // ordinal
-                for (FieldHolder f : cls.getFields()) {
-                    if (!f.hasModifier(org.teavm.model.ElementModifier.STATIC)) {
-                        llvmFields.add(LlvmMethodEmitter.llvmType(f.getType()));
-                    }
-                }
+                cls.getFields().stream()
+                    .filter(f -> !f.hasModifier(org.teavm.model.ElementModifier.STATIC))
+                    .map(f -> LlvmMethodEmitter.llvmType(f.getType()))
+                    .forEach(llvmFields::add);
             } else {
                 List<ValueType> fts = fieldTypes.get(name);
                 if (fts == null || fts.isEmpty()) continue;
-                for (ValueType ft : fts) llvmFields.add(LlvmMethodEmitter.llvmType(ft));
+                fts.stream().map(LlvmMethodEmitter::llvmType).forEach(llvmFields::add);
             }
 
             out.append("%").append(llvmStructName(name)).append(" = type { ")
@@ -358,14 +354,10 @@ class LlvmModuleEmitter {
     }
 
     private Set<String> collectDefinedNames() {
-        var defined = new LinkedHashSet<String>();
-        for (var entry : postOptMethods.entrySet()) {
-            MethodReader m = entry.getValue();
-            if (m != null && !isJavaLangObject(m.getReference().getClassName())) {
-                defined.add(LlvmMethodEmitter.mangle(m));
-            }
-        }
-        return defined;
+        return postOptMethods.values().stream()
+            .filter(m -> m != null && !isJavaLangObject(m.getReference().getClassName()))
+            .map(LlvmMethodEmitter::mangle)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private Set<String> collectCalledNames() {
@@ -431,13 +423,10 @@ class LlvmModuleEmitter {
     /** Returns true if {@code cls} declares a static method with the given name and no-arg void signature. */
     private static boolean hasStaticVoidMethod(ClassHolder cls, String name) {
         if (cls == null) return false;
-        for (MethodReader method : cls.getMethods()) {
-            if (!name.equals(method.getName())) continue;
-            if (!method.hasModifier(org.teavm.model.ElementModifier.STATIC)) continue;
-            if (method.parameterCount() != 0) continue;
-            if (!ValueType.VOID.equals(method.getResultType())) continue;
-            return true;
-        }
-        return false;
+        return cls.getMethods().stream().anyMatch(m ->
+            name.equals(m.getName()) &&
+            m.hasModifier(org.teavm.model.ElementModifier.STATIC) &&
+            m.parameterCount() == 0 &&
+            ValueType.VOID.equals(m.getResultType()));
     }
 }

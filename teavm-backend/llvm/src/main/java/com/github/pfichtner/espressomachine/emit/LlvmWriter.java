@@ -1,5 +1,8 @@
 package com.github.pfichtner.espressomachine.emit;
 
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 /**
  * Minimal DSL for emitting textual LLVM IR lines.
  *
@@ -110,24 +113,14 @@ public final class LlvmWriter {
 
     /** {@code call void @fn(i32 a, i32 b, ...)} */
     public void callVoid(String fn, Object... args) {
-        StringBuilder sb = new StringBuilder("call void @").append(fn).append("(");
-        for (int i = 0; i < args.length; i++) {
-            if (i > 0) sb.append(", ");
-            sb.append("i32 ").append(args[i]);
-        }
-        sb.append(")");
-        line(sb.toString());
+        String argList = IntStream.range(0, args.length).mapToObj(i -> "i32 " + args[i]).collect(Collectors.joining(", "));
+        line("call void @" + fn + "(" + argList + ")");
     }
 
     /** {@code call void @fn(ptr a, ...)} */
     public void callVoidPtr(String fn, Object... args) {
-        StringBuilder sb = new StringBuilder("call void @").append(fn).append("(");
-        for (int i = 0; i < args.length; i++) {
-            if (i > 0) sb.append(", ");
-            sb.append("ptr ").append(args[i]);
-        }
-        sb.append(")");
-        line(sb.toString());
+        String argList = IntStream.range(0, args.length).mapToObj(i -> "ptr " + args[i]).collect(Collectors.joining(", "));
+        line("call void @" + fn + "(" + argList + ")");
     }
 
     /** Append a raw two-space-indented instruction line. */

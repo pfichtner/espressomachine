@@ -151,9 +151,6 @@ public class GpioEmitter implements IntrinsicEmitter {
     }
 
     PinSpec pinMap(int pin) {
-        for (PinSpec pm : PIN_MAP) {
-            if (pm.pin() == pin) return pm;
-        }
-        return null;
+        return PIN_MAP.stream().filter(pm -> pm.pin() == pin).findFirst().orElse(null);
     }
 }

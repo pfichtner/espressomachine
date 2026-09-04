@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.teavm.model.BasicBlock;
 import org.teavm.model.Instruction;
@@ -113,11 +115,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     void emit() {
         escape = EscapeAnalyzer.analyze(program, method);
         emitFunctionHeader();
-        for (int i = 0; i < program.basicBlockCount(); i++) {
+        IntStream.range(0, program.basicBlockCount()).forEach(i -> {
             BasicBlock bb = program.basicBlockAt(i);
-            if (bb == null) continue;
-            emitBlock(bb, i);
-        }
+            if (bb != null) emitBlock(bb, i);
+        });
         out.append("}\n\n");
     }
 
@@ -157,21 +158,16 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
         // PHI nodes at block entry
         for (Phi phi : bb.getPhis()) {
-            StringBuilder phiLine = new StringBuilder();
-            phiLine.append("  ").append(v(phi.getReceiver())).append(" = phi ")
-                   .append(llvmIntType(phi.getReceiver())).append(" ");
-            List<String> arms = new ArrayList<>();
-            for (var inc : phi.getIncomings()) {
-                arms.add("[ " + resolveVar(inc.getValue()) + ", %" + bbLabel(inc.getSource().getIndex()) + " ]");
-            }
-            phiLine.append(String.join(", ", arms));
-            out.append(phiLine).append("\n");
+            String arms = phi.getIncomings().stream()
+                .map(inc -> "[ " + resolveVar(inc.getValue()) + ", %" + bbLabel(inc.getSource().getIndex()) + " ]")
+                .collect(Collectors.joining(", "));
+            out.append("  ").append(v(phi.getReceiver())).append(" = phi ")
+               .append(llvmIntType(phi.getReceiver())).append(" ")
+               .append(arms).append("\n");
         }
 
         // Instructions
-        for (Instruction insn : bb) {
-            insn.acceptVisitor(this);
-        }
+        bb.forEach(insn -> insn.acceptVisitor(this));
     }
 
     // ------------------------------------------------------------------
@@ -447,10 +443,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         if (insn.getInstance() != null) {
             args.add("ptr " + resolveVar(insn.getInstance()));
         }
-        for (int i = 0; i < insn.getArguments().size(); i++) {
-            var param = insn.getMethod().getDescriptor().parameterType(i);
-            args.add(llvmType(param) + " " + resolveVar(insn.getArguments().get(i)));
-        }
+        IntStream.range(0, insn.getArguments().size())
+            .mapToObj(i -> llvmType(insn.getMethod().getDescriptor().parameterType(i))
+                          + " " + resolveVar(insn.getArguments().get(i)))
+            .forEach(args::add);
         call.append(String.join(", ", args)).append(")");
         out.append(call).append("\n");
     }
@@ -614,15 +610,13 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     }
 
     private ValueType staticFieldType(String className, String fieldName) {
-        if (module != null) {
-            var cls = module.classes.get(className);
-            if (cls != null) {
-                for (var f : cls.getFields()) {
-                    if (f.getName().equals(fieldName)) return f.getType();
-                }
-            }
-        }
-        return ValueType.INTEGER;
+        if (module == null) return ValueType.INTEGER;
+        var cls = module.classes.get(className);
+        if (cls == null) return ValueType.INTEGER;
+        return cls.getFields().stream()
+            .filter(f -> f.getName().equals(fieldName))
+            .map(f -> f.getType())
+            .findFirst().orElse(ValueType.INTEGER);
     }
 
     private boolean isStaticObjectField(String className, String fieldName) {
@@ -669,10 +663,9 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         String cond = resolveVar(insn.getCondition());
         out.append("  switch i32 ").append(cond)
            .append(", label %").append(bbLabel(insn.getDefaultTarget().getIndex())).append(" [\n");
-        for (var entry : insn.getEntries()) {
+        insn.getEntries().forEach(entry ->
             out.append("    i32 ").append(entry.getCondition())
-               .append(", label %").append(bbLabel(entry.getTarget().getIndex())).append("\n");
-        }
+               .append(", label %").append(bbLabel(entry.getTarget().getIndex())).append("\n"));
         out.append("  ]\n");
     }
 
