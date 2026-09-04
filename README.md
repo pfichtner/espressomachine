@@ -145,6 +145,32 @@ avr-size build/Blink.elf
 espressomachine flash build/Blink.hex --port /dev/ttyUSB0
 ```
 
+## Running with Docker
+
+No local toolchain required — the image bundles Java, Maven, LLVM 18, and the AVR binutils.
+
+```bash
+# Build the image (compiles the JAR and pre-compiles all examples)
+docker build -t espressomachine .
+
+# Compile a bundled example to HEX (output lands in ./build on the host)
+docker run --rm -v "$PWD/build:/workspace/build" \
+    espressomachine build examples/blink/classes Blink --target atmega328p
+
+# Compile your own class files (mount the directory that contains them)
+docker run --rm \
+    -v "/path/to/your/classes:/input:ro" \
+    -v "$PWD/build:/workspace/build" \
+    espressomachine build /input YourClass --target atmega328p
+
+# Flash (requires passing the serial device into the container)
+docker run --rm --device /dev/ttyUSB0 \
+    -v "$PWD/build:/workspace/build" \
+    espressomachine flash /workspace/build/Blink.hex --port /dev/ttyUSB0
+```
+
+The container entrypoint is `espressomachine`, so every subcommand (`build`, `emit-llvm`, `inspect`, `flash`) works the same way as the native CLI.
+
 ## CLI reference
 
 ```
