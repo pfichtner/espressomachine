@@ -232,6 +232,14 @@ public class IrDumper {
                         if (method.getProgram() == null) continue;
                         replaceRandomInvokes(method.getProgram());
                     }
+                },
+                // Transformer 3: Replace java.lang.Math invokes in user code
+                (cls, ctx) -> {
+                    if (LlvmModuleEmitter.isJavaLangObject(cls.getName())) return;
+                    for (var method : cls.getMethods()) {
+                        if (method.getProgram() == null) continue;
+                        replaceMathInvokes(method.getProgram());
+                    }
                 }
             );
         }
@@ -271,6 +279,58 @@ public class IrDumper {
                         }
                         case "next" -> {
                             // next(int) is internal — already handled by stubs, skip
+                        }
+                    }
+                }
+            }
+        }
+
+        /** Bridge class name for intercepted java.lang.Math methods. */
+        private static final String MATH_BRIDGE_CLASS =
+                "com.github.pfichtner.espressomachine.emit.RuntimeMathBridge";
+
+        /**
+         * Walk a program and replace {@code java.lang.Math.min(int,int)},
+         * {@code max(int,int)}, {@code abs(int)}, {@code pow(double,double)},
+         * and {@code sqrt(double)} invoke instructions with calls to
+         * {@link RuntimeMathBridge} methods.
+         * The emitter intercepts those bridge calls and emits LLVM intrinsics.
+         */
+        private static void replaceMathInvokes(Program prog) {
+            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                BasicBlock bb = prog.basicBlockAt(bi);
+                if (bb == null) continue;
+                for (var it = bb.iterator(); it.hasNext(); ) {
+                    Instruction insn = it.next();
+                    if (!(insn instanceof InvokeInstruction inv)) continue;
+                    if (!"java.lang.Math".equals(inv.getMethod().getClassName())) continue;
+                    String name = inv.getMethod().getName();
+                    switch (name) {
+                        case "min" -> {
+                            if (ValueType.INTEGER.equals(inv.getMethod().getDescriptor().parameterType(0))) {
+                                inv.setMethod(new MethodReference(MATH_BRIDGE_CLASS,
+                                        MethodDescriptor.parse("mathMinInt(II)I")));
+                            }
+                        }
+                        case "max" -> {
+                            if (ValueType.INTEGER.equals(inv.getMethod().getDescriptor().parameterType(0))) {
+                                inv.setMethod(new MethodReference(MATH_BRIDGE_CLASS,
+                                        MethodDescriptor.parse("mathMaxInt(II)I")));
+                            }
+                        }
+                        case "abs" -> {
+                            if (ValueType.INTEGER.equals(inv.getMethod().getDescriptor().parameterType(0))) {
+                                inv.setMethod(new MethodReference(MATH_BRIDGE_CLASS,
+                                        MethodDescriptor.parse("mathAbsInt(I)I")));
+                            }
+                        }
+                        case "pow" -> {
+                            inv.setMethod(new MethodReference(MATH_BRIDGE_CLASS,
+                                    MethodDescriptor.parse("mathPow(DD)D")));
+                        }
+                        case "sqrt" -> {
+                            inv.setMethod(new MethodReference(MATH_BRIDGE_CLASS,
+                                    MethodDescriptor.parse("mathSqrt(D)D")));
                         }
                     }
                 }

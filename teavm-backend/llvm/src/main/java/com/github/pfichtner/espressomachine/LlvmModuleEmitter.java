@@ -354,15 +354,16 @@ class LlvmModuleEmitter {
             || className.startsWith("org.teavm.");
     }
 
-    /** Bridge class used by the transformer to replace java.util.Random invokes. */
-    private static final String BRIDGE_CLASS =
-            "com.github.pfichtner.espressomachine.emit.RuntimeRandomBridge";
+    /** Bridge classes whose invokes must be preserved via the pre-inlining snapshot. */
+    private static final java.util.Set<String> BRIDGE_CLASSES = java.util.Set.of(
+            "com.github.pfichtner.espressomachine.emit.RuntimeRandomBridge",
+            "com.github.pfichtner.espressomachine.emit.RuntimeMathBridge");
 
     /**
      * Returns true if the program contains any {@code InvokeInstruction}
-     * targeting {@link RuntimeRandomBridge} methods.  Such programs need to be
-     * emitted from the pre-inlining snapshot because the optimizer inlines
-     * the bridge methods and replaces the invokes with field loads.
+     * targeting a bridge class.  Such programs need to be emitted from the
+     * pre-inlining snapshot because the optimizer inlines the bridge methods
+     * and replaces the invokes with field loads.
      */
     static boolean hasBridgeInvokes(Program prog) {
         for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
@@ -370,7 +371,7 @@ class LlvmModuleEmitter {
             if (bb == null) continue;
             for (Instruction insn : bb) {
                 if (insn instanceof InvokeInstruction inv
-                        && BRIDGE_CLASS.equals(inv.getMethod().getClassName())) {
+                        && BRIDGE_CLASSES.contains(inv.getMethod().getClassName())) {
                     return true;
                 }
             }
