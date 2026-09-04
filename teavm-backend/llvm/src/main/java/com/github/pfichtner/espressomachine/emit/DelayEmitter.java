@@ -5,8 +5,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 import org.teavm.model.Variable;
-
-import com.github.pfichtner.espressomachine.AvrIntrinsics;
+import org.teavm.model.instructions.InvokeInstruction;
 
 /**
  * Emits the ATmega328P intrinsic lowering for {@code Delay} API calls.
@@ -19,29 +18,52 @@ import com.github.pfichtner.espressomachine.AvrIntrinsics;
  */
 public class DelayEmitter {
 
+    public static final String CLASS = "com.github.pfichtner.espressomachine.api.Delay";
+
     private DelayEmitter() {}
 
+    public static boolean canHandle(String className) {
+        return CLASS.equals(className);
+    }
+
     /**
-     * Emit {@code Delay.ms(ms)}.
+     * Emit a Delay intrinsic call. Handles class check, method dispatch and
+     * fallback for unknown methods.
      *
      * @return updated tmpCounter
      */
-    public static int emitMs(StringBuilder out, List<? extends Variable> args, int tc,
-                             Function<Variable, String> resolveVar) {
+    public static int emit(StringBuilder out, InvokeInstruction insn,
+                           Map<Integer, String> constVars, int tmpCounter,
+                           Function<Variable, String> resolveVar,
+                           Map<Integer, String> objectRefs) {
+        String method = insn.getMethod().getName();
+        List<? extends Variable> args = insn.getArguments();
+        return switch (method) {
+            case "ms"   -> emitMs(out, args, tmpCounter, resolveVar);
+            case "time" -> emitTime(out, args, constVars, objectRefs, tmpCounter, resolveVar);
+            default     -> emitFallback(out, insn, args, tmpCounter, resolveVar);
+        };
+    }
+
+    public static String declarations() {
+        return """
+                declare void @__espressomachine_delay_ms(i32 %ms)
+                """;
+    }
+
+    // ---- Internal helpers ----
+
+    private static int emitMs(StringBuilder out, List<? extends Variable> args, int tc,
+                              Function<Variable, String> resolveVar) {
         out.append("  call void @__espressomachine_delay_ms(i32 ")
            .append(resolveVar.apply(args.get(0))).append(")\n");
         return tc;
     }
 
-    /**
-     * Emit {@code Delay.time(amount, unit)}.
-     *
-     * @return updated tmpCounter
-     */
-    public static int emitTime(StringBuilder out, List<? extends Variable> args,
-                               Map<Integer, String> constVars,
-                               Map<Integer, String> objectRefs, int tc,
-                               Function<Variable, String> resolveVar) {
+    private static int emitTime(StringBuilder out, List<? extends Variable> args,
+                                Map<Integer, String> constVars,
+                                Map<Integer, String> objectRefs, int tc,
+                                Function<Variable, String> resolveVar) {
         String unitGlobal = (args.size() > 1) ? objectRefs.get(args.get(1).getIndex()) : null;
         Integer denominator = null;   // unit < 1 ms (nanos/micros)
         long multiplier = 1;          // unit >= 1 ms
@@ -67,7 +89,7 @@ public class DelayEmitter {
             return tc;
         }
 
-        Integer amount = AvrIntrinsics.constInt(args.get(0), constVars);
+        Integer amount = constInt(args.get(0), constVars);
         if (amount != null) {
             // Constant amount + constant unit → statically calculated millis.
             long millis = (denominator != null) ? amount / denominator : amount * multiplier;
@@ -94,12 +116,25 @@ public class DelayEmitter {
         return tc;
     }
 
-    /**
-     * Returns LLVM declarations needed for the Delay runtime-dispatch intrinsics.
-     */
-    public static String declarations() {
-        return """
-                declare void @__espressomachine_delay_ms(i32 %ms)
-                """;
+    private static int emitFallback(StringBuilder out, InvokeInstruction insn,
+                                    List<? extends Variable> args, int tc,
+                                    Function<Variable, String> resolveVar) {
+        String fqn = insn.getMethod().getClassName();
+        String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
+        out.append("  call void @__espressomachine_")
+           .append(simpleName.toLowerCase()).append("_")
+           .append(insn.getMethod().getName()).append("(");
+        for (int i = 0; i < args.size(); i++) {
+            if (i > 0) out.append(", ");
+            out.append("i32 ").append(resolveVar.apply(args.get(i)));
+        }
+        out.append(")\n");
+        return tc;
+    }
+
+    static Integer constInt(Variable v, Map<Integer, String> constVars) {
+        String s = constVars.get(v.getIndex());
+        if (s == null) return null;
+        try { return Integer.parseInt(s); } catch (NumberFormatException e) { return null; }
     }
 }
