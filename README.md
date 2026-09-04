@@ -150,14 +150,10 @@ espressomachine flash build/Blink.hex --port /dev/ttyUSB0
 No local toolchain required — the image bundles Java, Maven, LLVM 18, and the AVR binutils.
 
 ```bash
-# Build the image (compiles the JAR and pre-compiles all examples)
+# Build the image
 docker build -t espressomachine .
 
-# Compile a bundled example to HEX (output lands in ./build on the host)
-docker run --rm -v "$PWD/build:/workspace/build" \
-    espressomachine build examples/blink/classes Blink --target atmega328p
-
-# Compile your own class files (mount the directory that contains them)
+# Compile your class files to HEX (mount the directory that contains them)
 docker run --rm \
     -v "/path/to/your/classes:/input:ro" \
     -v "$PWD/build:/workspace/build" \

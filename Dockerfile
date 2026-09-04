@@ -1,9 +1,8 @@
-# ---- Stage 1: Build the compiler JAR and pre-compile examples ----
+# ---- Stage 1: Build the compiler JAR ----
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
 COPY . .
 RUN mvn package -q -f teavm-backend/llvm/pom.xml
-RUN mvn compile -q -f examples/pom.xml
 
 # ---- Stage 2: Runtime environment ----
 FROM eclipse-temurin:17-jre-jammy
@@ -21,7 +20,6 @@ RUN apt-get update -y && \
 
 # Copy essential project files from the build stage
 COPY --from=build /workspace/teavm-backend/llvm/target/*.jar /workspace/teavm-backend/llvm/target/
-COPY --from=build /workspace/examples /workspace/examples
 COPY --from=build /workspace/runtime /workspace/runtime
 COPY --from=build /workspace/targets /workspace/targets
 
