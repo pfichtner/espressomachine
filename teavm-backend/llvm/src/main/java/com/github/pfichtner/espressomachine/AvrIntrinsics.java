@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.teavm.model.BasicBlock;
+import org.teavm.model.Instruction;
+import org.teavm.model.Program;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.InvokeInstruction;
 
@@ -36,10 +39,6 @@ public class AvrIntrinsics {
         return isIntrinsic(insn.getMethod().getClassName());
     }
 
-    public boolean isSerial(String className) {
-        return serial.canHandle(className);
-    }
-
     /**
      * Emit the intrinsic — delegates to the matching emitter.
      *
@@ -58,11 +57,30 @@ public class AvrIntrinsics {
                 .orElse(tmpCounter);
     }
 
-    public String runtimeDeclarations() {
-        return gpio.declarations() + delay.declarations();
+    /**
+     * Returns all runtime declarations needed for the given program set.
+     * GPIO and Delay declarations are always included; Serial is only added when
+     * the programs contain at least one Serial call.
+     */
+    public String declarations(Map<String, Program> programs) {
+        String base = gpio.declarations() + delay.declarations();
+        return usesSerial(programs) ? base + serial.declarations() : base;
     }
 
-    public String serialDeclarations() {
-        return serial.declarations();
+    private boolean usesSerial(Map<String, Program> programs) {
+        for (Program prog : programs.values()) {
+            if (prog == null) continue;
+            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                BasicBlock bb = prog.basicBlockAt(bi);
+                if (bb == null) continue;
+                for (Instruction insn : bb) {
+                    if (insn instanceof InvokeInstruction inv
+                            && serial.canHandle(inv.getMethod().getClassName())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }

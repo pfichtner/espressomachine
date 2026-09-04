@@ -108,8 +108,7 @@ class LlvmModuleEmitter {
         emitStaticFields(out);
 
         // 2b. AVR intrinsic runtime declarations (serial only when the program uses it)
-        out.append(intrinsics.runtimeDeclarations());
-        if (usesSerial()) out.append(intrinsics.serialDeclarations());
+        out.append(intrinsics.declarations(postOptPrograms));
         out.append("\n");
 
         // 3. External declarations (java.lang.Object methods etc.)
@@ -356,24 +355,6 @@ class LlvmModuleEmitter {
         var names = new ArrayList<>(classes.getClassNames());
         java.util.Collections.sort(names);
         return names;
-    }
-
-    private boolean usesSerial() {
-        for (var entry : postOptPrograms.entrySet()) {
-            Program prog = entry.getValue();
-            if (prog == null) continue;
-            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
-                BasicBlock bb = prog.basicBlockAt(bi);
-                if (bb == null) continue;
-                for (Instruction insn : bb) {
-                    if (insn instanceof InvokeInstruction inv
-                            && intrinsics.isSerial(inv.getMethod().getClassName())) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
     }
 
     private Set<String> collectDefinedNames() {
