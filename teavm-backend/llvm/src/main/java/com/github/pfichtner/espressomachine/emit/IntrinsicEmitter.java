@@ -11,7 +11,7 @@ public interface IntrinsicEmitter {
 
     boolean canHandle(String className);
 
-    int emit(LlvmWriter w, InvokeInstruction insn,
+    int emit(LlvmWriter writer, InvokeInstruction insn,
              Map<Integer, String> constVars,
              Function<Variable, String> resolveVar,
              Map<Integer, String> objectRefs);

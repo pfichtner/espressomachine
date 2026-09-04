@@ -106,7 +106,7 @@ public class GpioEmitter implements IntrinsicEmitter {
 
     // ---- Internal helpers ----
 
-    private void emitPinMode(LlvmWriter w, List<? extends Variable> args,
+    private void emitPinMode(LlvmWriter writer, List<? extends Variable> args,
                              Map<Integer, String> constVars,
                              Function<Variable, String> resolveVar) {
         Integer pin  = constInt(args.get(0), constVars);
@@ -116,25 +116,25 @@ public class GpioEmitter implements IntrinsicEmitter {
             PinSpec pm = pinMap(pin);
             if (pm != null) {
                 // Inline: DDRx |= mask  or  DDRx &= ~mask
-                String ptr = w.ptr(pm.ddr());
-                String tmp1 = w.temp();
-                String tmp2 = w.temp();
-                w.loadVolatile(tmp1, ptr);
+                String ptr = writer.ptr(pm.ddr());
+                String tmp1 = writer.temp();
+                String tmp2 = writer.temp();
+                writer.loadVolatile(tmp1, ptr);
                 if (mode == GPIO_OUTPUT) {
-                    w.or8(tmp2, tmp1, pm.mask());
+                    writer.or8(tmp2, tmp1, pm.mask());
                 } else {
-                    w.and8(tmp2, tmp1, pm.mask());
+                    writer.and8(tmp2, tmp1, pm.mask());
                 }
-                w.storeVolatile(tmp2, ptr);
+                writer.storeVolatile(tmp2, ptr);
                 return;
             }
         }
         // Fallback: runtime call
-        w.callVoid("__espressomachine_gpio_pinmode",
+        writer.callVoid("__espressomachine_gpio_pinmode",
                 resolveVar.apply(args.get(0)), resolveVar.apply(args.get(1)));
     }
 
-    private void emitDigitalWrite(LlvmWriter w, List<? extends Variable> args,
+    private void emitDigitalWrite(LlvmWriter writer, List<? extends Variable> args,
                                   Map<Integer, String> constVars,
                                   Function<Variable, String> resolveVar) {
         Integer pin   = constInt(args.get(0), constVars);
@@ -143,37 +143,37 @@ public class GpioEmitter implements IntrinsicEmitter {
         if (pin != null && value != null) {
             PinSpec pm = pinMap(pin);
             if (pm != null) {
-                String ptr = w.ptr(pm.port());
-                String tmp1 = w.temp();
-                String tmp2 = w.temp();
-                w.loadVolatile(tmp1, ptr);
+                String ptr = writer.ptr(pm.port());
+                String tmp1 = writer.temp();
+                String tmp2 = writer.temp();
+                writer.loadVolatile(tmp1, ptr);
                 if (value == GPIO_HIGH) {
-                    w.or8(tmp2, tmp1, pm.mask());
+                    writer.or8(tmp2, tmp1, pm.mask());
                 } else {
-                    w.and8(tmp2, tmp1, pm.mask());
+                    writer.and8(tmp2, tmp1, pm.mask());
                 }
-                w.storeVolatile(tmp2, ptr);
+                writer.storeVolatile(tmp2, ptr);
                 return;
             }
         }
-        w.callVoid("__espressomachine_gpio_digitalwrite",
+        writer.callVoid("__espressomachine_gpio_digitalwrite",
                 resolveVar.apply(args.get(0)), resolveVar.apply(args.get(1)));
     }
 
-    private void emitAnalogRead(LlvmWriter w, InvokeInstruction insn,
+    private void emitAnalogRead(LlvmWriter writer, InvokeInstruction insn,
                                List<? extends Variable> args,
                                Function<Variable, String> resolveVar) {
         String recv = resolveVar.apply(insn.getReceiver());
-        w.callI32(recv, "__espressomachine_gpio_analogread",
+        writer.callI32(recv, "__espressomachine_gpio_analogread",
                 args.stream().map(resolveVar).toArray());
     }
 
-    private void emitFallback(LlvmWriter w, InvokeInstruction insn,
+    private void emitFallback(LlvmWriter writer, InvokeInstruction insn,
                               List<? extends Variable> args,
                               Function<Variable, String> resolveVar) {
         String fqn = insn.getMethod().getClassName();
         String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
-        w.callVoid("__espressomachine_" + simpleName.toLowerCase() + "_" + insn.getMethod().getName(),
+        writer.callVoid("__espressomachine_" + simpleName.toLowerCase() + "_" + insn.getMethod().getName(),
                 args.stream().map(resolveVar).toArray());
     }
 

@@ -169,9 +169,7 @@ class LlvmModuleEmitter {
     // so the Serial runtime can walk it directly. The Java String heap is not
     // supported, but Serial.print(String)/println(String) lower to these globals.
     String internString(String literal) {
-        return stringGlobals.computeIfAbsent(literal, lit -> {
-            return "@espressomachine_string_" + stringGlobals.size();
-        });
+        return stringGlobals.computeIfAbsent(literal, lit -> "@espressomachine_string_" + stringGlobals.size());
     }
 
     private void emitStringGlobals(StringBuilder out) {
@@ -348,7 +346,7 @@ class LlvmModuleEmitter {
     }
 
     private List<String> sortedClassNames() {
-        var names = new ArrayList<>(classes.getClassNames());
+        var names = new ArrayList<String>(classes.getClassNames());
         java.util.Collections.sort(names);
         return names;
     }

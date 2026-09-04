@@ -1,7 +1,7 @@
 package com.github.pfichtner.espressomachine.emit;
 
+import java.util.Arrays;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * Minimal DSL for emitting textual LLVM IR lines.
@@ -113,19 +113,19 @@ public final class LlvmWriter {
 
     /** {@code call void @fn(i32 a, i32 b, ...)} */
     public void callVoid(String fn, Object... args) {
-        String argList = IntStream.range(0, args.length).mapToObj(i -> "i32 " + args[i]).collect(Collectors.joining(", "));
+        String argList = Arrays.stream(args).map(arg -> "i32 " + arg).collect(Collectors.joining(", "));
         line("call void @" + fn + "(" + argList + ")");
     }
 
     /** {@code call void @fn(ptr a, ...)} */
     public void callVoidPtr(String fn, Object... args) {
-        String argList = IntStream.range(0, args.length).mapToObj(i -> "ptr " + args[i]).collect(Collectors.joining(", "));
+        String argList = Arrays.stream(args).map(arg -> "ptr " + arg).collect(Collectors.joining(", "));
         line("call void @" + fn + "(" + argList + ")");
     }
 
     /** {@code dst = call i32 @fn(i32 a, i32 b, ...)} */
     public void callI32(String dst, String fn, Object... args) {
-        String argList = IntStream.range(0, args.length).mapToObj(i -> "i32 " + args[i]).collect(Collectors.joining(", "));
+        String argList = Arrays.stream(args).map(arg -> "i32 " + arg).collect(Collectors.joining(", "));
         line(dst + " = call i32 @" + fn + "(" + argList + ")");
     }
 
