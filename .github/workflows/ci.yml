@@ -46,3 +46,6 @@ jobs:
 
       - name: Run virtualavr system test (serial echo)
         run: bash tests/systemtest-echo.sh
+
+      - name: Run virtualavr system test (analog)
+        run: bash tests/systemtest-analog.sh
