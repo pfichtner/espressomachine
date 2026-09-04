@@ -23,17 +23,21 @@ import com.github.pfichtner.espressomachine.emit.SerialEmitter;
  */
 public class AvrIntrinsics {
 
-    public static final String GPIO_CLASS   = GpioEmitter.CLASS;
-    public static final String DELAY_CLASS  = DelayEmitter.CLASS;
-    public static final String SERIAL_CLASS = SerialEmitter.CLASS;
-
     private final IntrinsicEmitter gpio   = new GpioEmitter();
     private final IntrinsicEmitter delay  = new DelayEmitter();
     private final IntrinsicEmitter serial = new SerialEmitter();
     private final List<IntrinsicEmitter> emitters = List.of(gpio, delay, serial);
 
+    public boolean isIntrinsic(String className) {
+        return emitters.stream().anyMatch(e -> e.canHandle(className));
+    }
+
     public boolean isIntrinsic(InvokeInstruction insn) {
-        return emitters.stream().anyMatch(e -> e.canHandle(insn.getMethod().getClassName()));
+        return isIntrinsic(insn.getMethod().getClassName());
+    }
+
+    public boolean isSerial(String className) {
+        return serial.canHandle(className);
     }
 
     /**

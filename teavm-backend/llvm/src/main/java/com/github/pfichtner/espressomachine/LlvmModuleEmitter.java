@@ -348,10 +348,8 @@ class LlvmModuleEmitter {
     }
 
     // Intrinsic API classes have no LLVM definitions — they are handled by AvrIntrinsics.
-    static boolean isIntrinsicClass(String className) {
-        return AvrIntrinsics.GPIO_CLASS.equals(className)
-            || AvrIntrinsics.DELAY_CLASS.equals(className)
-            || AvrIntrinsics.SERIAL_CLASS.equals(className);
+    boolean isIntrinsicClass(String className) {
+        return intrinsics.isIntrinsic(className);
     }
 
     private List<String> sortedClassNames() {
@@ -369,7 +367,7 @@ class LlvmModuleEmitter {
                 if (bb == null) continue;
                 for (Instruction insn : bb) {
                     if (insn instanceof InvokeInstruction inv
-                            && AvrIntrinsics.SERIAL_CLASS.equals(inv.getMethod().getClassName())) {
+                            && intrinsics.isSerial(inv.getMethod().getClassName())) {
                         return true;
                     }
                 }
