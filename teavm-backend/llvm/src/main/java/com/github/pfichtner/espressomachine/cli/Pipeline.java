@@ -51,23 +51,27 @@ class Pipeline {
 
         System.out.println("[3/6] Compiling " + entryClass + ".ll → .o ...");
         run("llc-18", "-march=avr", "-mcpu=" + mcu, "-filetype=obj",
+                "-function-sections", "-data-sections",
                 "-o", outputDir.resolve(entryClass + ".o").toString(),
                 inputLl.toString());
 
         System.out.println("[4/6] Compiling gpio.ll → gpio.o ...");
         run("llc-18", "-march=avr", "-mcpu=" + mcu, "-filetype=obj",
+                "-function-sections", "-data-sections",
                 "-o", outputDir.resolve("gpio.o").toString(),
                 targetDir.resolve("gpio.ll").toString());
 
         System.out.println("[5/6] Generating delay.ll (DELAY_ITERS=" + delayIters + ") ...");
         Path calibratedDelay = substituteDelay(targetDir, delayIters);
         run("llc-18", "-march=avr", "-mcpu=" + mcu, "-filetype=obj",
+                "-function-sections", "-data-sections",
                 "-o", outputDir.resolve("delay.o").toString(),
                 calibratedDelay.toString());
 
         if (usesSerial) {
             System.out.println("[5b/6] Compiling serial.ll → serial.o ...");
             run("llc-18", "-march=avr", "-mcpu=" + mcu, "-filetype=obj",
+                    "-function-sections", "-data-sections",
                     "-o", outputDir.resolve("serial.o").toString(),
                     targetDir.resolve("serial.ll").toString());
         }
@@ -75,6 +79,7 @@ class Pipeline {
         if (usesMillis) {
             System.out.println("[5c/6] Compiling time.ll → time.o ...");
             run("llc-18", "-march=avr", "-mcpu=" + mcu, "-filetype=obj",
+                    "-function-sections", "-data-sections",
                     "-o", outputDir.resolve("time.o").toString(),
                     targetDir.resolve("time.ll").toString());
         }
@@ -82,6 +87,7 @@ class Pipeline {
         System.out.println("[6/6] Linking → " + entryClass + ".elf ...");
         List<String> linkArgs = new ArrayList<>(Arrays.asList(
                 "avr-ld",
+                "--gc-sections",
                 "-T", scriptsDir.resolve("linker.ld").toString(),
                 outputDir.resolve("startup.o").toString(),
                 outputDir.resolve(entryClass + ".o").toString(),

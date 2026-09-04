@@ -83,12 +83,14 @@ avr-as -mmcu=$MCU "$CALIBRATED_STARTUP" -o "$BUILD_DIR/startup.o"
 # ---- Step 3: compile user LLVM IR ----
 echo "[3/8] Compiling ${ENTRY_CLASS}.ll → ${ENTRY_CLASS}.o ..."
 llc-18 -march=avr -mcpu=$MCU -filetype=obj \
+    -function-sections -data-sections \
     -o "$BUILD_DIR/${ENTRY_CLASS}.o" \
     "$OUTPUT_LL"
 
 # ---- Step 4: compile gpio.ll runtime ----
 echo "[4/8] Compiling gpio.ll → gpio.o ..."
 llc-18 -march=avr -mcpu=$MCU -filetype=obj \
+    -function-sections -data-sections \
     -o "$BUILD_DIR/gpio.o" \
     "$TARGET_DIR/gpio.ll"
 
@@ -97,12 +99,14 @@ echo "[5/8] Generating delay.ll (DELAY_ITERS=$DELAY_ITERS) → delay.o ..."
 CALIBRATED_DELAY="$BUILD_DIR/delay_${DELAY_ITERS}.ll"
 sed "s/__DELAY_ITERS__/$DELAY_ITERS/g" "$TARGET_DIR/delay.ll" > "$CALIBRATED_DELAY"
 llc-18 -march=avr -mcpu=$MCU -filetype=obj \
+    -function-sections -data-sections \
     -o "$BUILD_DIR/delay.o" \
     "$CALIBRATED_DELAY"
 
 # ---- Step 6: compile random.ll runtime ----
 echo "[6/8] Compiling random.ll → random.o ..."
 llc-18 -march=avr -mcpu=$MCU -filetype=obj \
+    -function-sections -data-sections \
     -o "$BUILD_DIR/random.o" \
     "$TARGET_DIR/random.ll"
 
@@ -115,6 +119,7 @@ TIME_OBJ=""
 if grep -q "@__espressomachine_time_millis" "$OUTPUT_LL" 2>/dev/null; then
     echo "[6c/8] Compiling time.ll → time.o ..."
     llc-18 -march=avr -mcpu=$MCU -filetype=obj \
+        -function-sections -data-sections \
         -o "$BUILD_DIR/time.o" \
         "$TARGET_DIR/time.ll"
     TIME_OBJ="$BUILD_DIR/time.o"
@@ -122,7 +127,7 @@ fi
 
 # ---- Step 7: link ----
 echo "[7/8] Linking → ${ENTRY_CLASS}.elf ..."
-avr-ld -T "$SCRIPT_DIR/linker.ld" \
+avr-ld --gc-sections -T "$SCRIPT_DIR/linker.ld" \
     "$BUILD_DIR/startup.o" \
     "$BUILD_DIR/${ENTRY_CLASS}.o" \
     "$BUILD_DIR/gpio.o" \
