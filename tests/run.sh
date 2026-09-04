@@ -229,6 +229,11 @@ run_ll_test "functions" \
     "examples/functions/target/classes:$API_CLASSES" \
     "FunctionsExample"
 
+# Time.millis() — Timer0 overflow counter, non-blocking timing
+run_ll_test "millis-blink" \
+    "examples/millis-blink/target/classes:$API_CLASSES" \
+    "MillisBlink"
+
 # ------------------------------------------------------------------
 # System integration test (requires Docker + Node.js + AVR toolchain)
 # ------------------------------------------------------------------

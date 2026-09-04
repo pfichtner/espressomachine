@@ -445,6 +445,9 @@ class LlvmModuleEmitter {
 
         out.append("define void @").append(mainName).append("() {\n");
         out.append("entry:\n");
+        if (intrinsics.isMillisUsed(postOptPrograms)) {
+            out.append("  call void @__espressomachine_time_init()\n");
+        }
         if (hasSetup) {
             out.append("  call void @").append(setupName).append("()\n");
         }

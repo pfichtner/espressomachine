@@ -18,6 +18,7 @@ import com.github.pfichtner.espressomachine.emit.MathBridgeEmitter;
 import com.github.pfichtner.espressomachine.emit.RandomBridgeEmitter;
 import com.github.pfichtner.espressomachine.emit.RandomEmitter;
 import com.github.pfichtner.espressomachine.emit.SerialEmitter;
+import com.github.pfichtner.espressomachine.emit.TimeEmitter;
 
 /**
  * Thin dispatcher for ATmega328P intrinsic lowering.
@@ -29,6 +30,8 @@ import com.github.pfichtner.espressomachine.emit.SerialEmitter;
  */
 public class AvrIntrinsics {
 
+    private final TimeEmitter timeEmitter = new TimeEmitter();
+
 	private final List<IntrinsicEmitter> emitters = List.of(
 			new GpioEmitter(),
 			new DelayEmitter(),
@@ -36,7 +39,8 @@ public class AvrIntrinsics {
 			new RandomEmitter(),
 			new JavaRandomEmitter(),
 			new RandomBridgeEmitter(),
-			new MathBridgeEmitter());
+			new MathBridgeEmitter(),
+			timeEmitter);
 
     public boolean isIntrinsic(String className) {
         return emitters.stream().anyMatch(e -> e.canHandle(className));
@@ -72,5 +76,9 @@ public class AvrIntrinsics {
         return emitters.stream()
                 .map(e -> e.declarations(programs))
                 .collect(Collectors.joining());
+    }
+
+    public boolean isMillisUsed(Map<String, Program> programs) {
+        return timeEmitter.isMillisUsed(programs);
     }
 }
