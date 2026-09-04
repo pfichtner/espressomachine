@@ -33,18 +33,18 @@ public class DelayEmitter implements IntrinsicEmitter {
      *
      * @return updated tmpCounter
      */
-    public int emit(LlvmWriter w, InvokeInstruction insn,
+    public int emit(LlvmWriter writer, InvokeInstruction insn,
                     Map<Integer, String> constVars,
                     Function<Variable, String> resolveVar,
                     Map<Integer, String> objectRefs) {
         String method = insn.getMethod().getName();
         List<? extends Variable> args = insn.getArguments();
         switch (method) {
-            case "ms"   -> emitMs(w, args, resolveVar);
-            case "time" -> emitTime(w, args, constVars, objectRefs, resolveVar);
-            default     -> emitFallback(w, insn, args, resolveVar);
+            case "ms"   -> emitMs(writer, args, resolveVar);
+            case "time" -> emitTime(writer, args, constVars, objectRefs, resolveVar);
+            default     -> emitFallback(writer, insn, args, resolveVar);
         }
-        return w.tmpCounter();
+        return writer.tmpCounter();
     }
 
     public String declarations(Map<String, Program> programs) {
@@ -55,9 +55,9 @@ public class DelayEmitter implements IntrinsicEmitter {
 
     // ---- Internal helpers ----
 
-    private void emitMs(LlvmWriter w, List<? extends Variable> args,
+    private void emitMs(LlvmWriter writer, List<? extends Variable> args,
                         Function<Variable, String> resolveVar) {
-        w.callVoid("__espressomachine_delay_ms", resolveVar.apply(args.get(0)));
+        writer.callVoid("__espressomachine_delay_ms", resolveVar.apply(args.get(0)));
     }
 
     private void emitTime(LlvmWriter w, List<? extends Variable> args,
@@ -108,17 +108,17 @@ public class DelayEmitter implements IntrinsicEmitter {
         w.callVoid("__espressomachine_delay_ms", tmp);
     }
 
-    private void emitFallback(LlvmWriter w, InvokeInstruction insn,
+    private void emitFallback(LlvmWriter writer, InvokeInstruction insn,
                               List<? extends Variable> args,
                               Function<Variable, String> resolveVar) {
         String fqn = insn.getMethod().getClassName();
         String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
-        w.callVoid("__espressomachine_" + simpleName.toLowerCase() + "_" + insn.getMethod().getName(),
+        writer.callVoid("__espressomachine_" + simpleName.toLowerCase() + "_" + insn.getMethod().getName(),
                 args.stream().map(resolveVar).toArray());
     }
 
-    Integer constInt(Variable v, Map<Integer, String> constVars) {
-        String s = constVars.get(v.getIndex());
+    Integer constInt(Variable variable, Map<Integer, String> constVars) {
+        String s = constVars.get(variable.getIndex());
         if (s == null) return null;
         try { return Integer.parseInt(s); } catch (NumberFormatException e) { return null; }
     }

@@ -42,10 +42,8 @@ public class EspressoMachineCli {
             case "inspect"   -> inspect(rest);
             case "emit-llvm" -> emitLlvm(rest);
             case "flash"     -> flash(rest);
-            default -> {
-                // Could be legacy IrDumper invocation where first arg is a classpath
-                IrDumper.main(args);
-            }
+            default -> // Could be legacy IrDumper invocation where first arg is a classpath
+                    IrDumper.main(args);
         }
     }
 
@@ -130,8 +128,8 @@ public class EspressoMachineCli {
         String outputDir;    // --output
         String outputFile;   // -o (for emit-llvm)
         String port;         // --port (for flash)
-        List<String> positionals = new ArrayList<>();
-        List<String> extraCp = new ArrayList<>();
+        final List<String> positionals = new ArrayList<>();
+        final List<String> extraCp = new ArrayList<>();
 
         static Opts parse(String[] args) {
             Opts o = new Opts();

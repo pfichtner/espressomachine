@@ -8,7 +8,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.teavm.model.BasicBlock;
-import org.teavm.model.Instruction;
 import org.teavm.model.MethodReader;
 import org.teavm.model.Phi;
 import org.teavm.model.Program;

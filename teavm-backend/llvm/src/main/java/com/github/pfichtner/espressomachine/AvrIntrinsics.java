@@ -25,10 +25,7 @@ import com.github.pfichtner.espressomachine.emit.SerialEmitter;
  */
 public class AvrIntrinsics {
 
-    private final IntrinsicEmitter gpio   = new GpioEmitter();
-    private final IntrinsicEmitter delay  = new DelayEmitter();
-    private final IntrinsicEmitter serial = new SerialEmitter();
-    private final List<IntrinsicEmitter> emitters = List.of(gpio, delay, serial);
+    private final List<IntrinsicEmitter> emitters = List.of(new GpioEmitter(), new DelayEmitter(), new SerialEmitter());
 
     public boolean isIntrinsic(String className) {
         return emitters.stream().anyMatch(e -> e.canHandle(className));
@@ -47,12 +44,12 @@ public class AvrIntrinsics {
                     Map<Integer, String> constVars, int tmpCounter,
                     Function<Variable, String> resolveVar,
                     Map<Integer, String> objectRefs) {
-        LlvmWriter w = new LlvmWriter(out, tmpCounter);
+        LlvmWriter writer = new LlvmWriter(out, tmpCounter);
         String cls = insn.getMethod().getClassName();
         return emitters.stream()
                 .filter(e -> e.canHandle(cls))
                 .findFirst()
-                .map(e -> e.emit(w, insn, constVars, resolveVar, objectRefs))
+                .map(e -> e.emit(writer, insn, constVars, resolveVar, objectRefs))
                 .orElse(tmpCounter);
     }
 
