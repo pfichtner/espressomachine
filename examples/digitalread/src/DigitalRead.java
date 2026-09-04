@@ -9,9 +9,9 @@ class DigitalRead {
     static void loop() {
         if (GPIO.digitalRead(2) == GPIO.HIGH) {
             GPIO.digitalWrite(13, GPIO.HIGH);
-            Delay.ms(200);
+            Delay.delay(200);
             GPIO.digitalWrite(13, GPIO.LOW);
-            Delay.ms(200);
+            Delay.delay(200);
         } else {
             GPIO.digitalWrite(13, GPIO.LOW);
         }

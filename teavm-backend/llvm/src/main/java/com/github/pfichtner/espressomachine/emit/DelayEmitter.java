@@ -12,8 +12,8 @@ import org.teavm.model.instructions.InvokeInstruction;
 /**
  * Emits the ATmega328P intrinsic lowering for {@code Delay} API calls.
  *
- * While {@code Delay.ms} lowers straight to the runtime delay loop,
- * {@code Delay.time} statically computes the millisecond equivalent when the
+ * While {@code Delay.delay(int)} lowers straight to the runtime delay loop,
+ * {@code Delay.delay(long, TimeUnit)} statically computes the millisecond equivalent when the
  * {@code TimeUnit} argument is a compile-time enum constant and folds it into
  * {@code __espressomachine_delay_ms}; non-constant units fall back to a runtime
  * {@code __espressomachine_delay_time} call.
@@ -38,9 +38,11 @@ public class DelayEmitter implements IntrinsicEmitter {
         String method = insn.getMethod().getName();
         List<? extends Variable> args = insn.getArguments();
         switch (method) {
-            case "ms"   -> emitMs(writer, args, resolveVar);
-            case "time" -> emitTime(writer, args, constVars, objectRefs, resolveVar);
-            default     -> emitFallback(writer, insn, args, resolveVar);
+            case "delay" -> {
+                if (args.size() == 1) emitMs(writer, args, resolveVar);
+                else                  emitTime(writer, args, constVars, objectRefs, resolveVar);
+            }
+            default -> emitFallback(writer, insn, args, resolveVar);
         }
         return writer.tmpCounter();
     }
