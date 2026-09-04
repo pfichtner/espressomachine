@@ -58,5 +58,6 @@
         <module>java-math</module>
         <module>digitalread</module>
         <module>functions</module>
+        <module>millis-blink</module>
     </modules>
 </project>

@@ -39,8 +39,10 @@ class Pipeline {
         String mcu = readTargetVar(targetDir, "MCU", "atmega328p");
         String delayIters = readTargetVar(targetDir, "DELAY_ITERS", "4000");
 
-        // Detect serial usage by scanning the generated LLVM IR for serial write calls.
-        boolean usesSerial = Files.readString(inputLl).contains("@__espressomachine_serial_write");
+        // Detect feature usage by scanning the generated LLVM IR.
+        String generatedIr = Files.readString(inputLl);
+        boolean usesSerial = generatedIr.contains("@__espressomachine_serial_write");
+        boolean usesMillis = generatedIr.contains("@__espressomachine_time_millis");
 
         System.out.println("[2/6] Assembling startup.S ...");
         Path startupS = substituteStartup(scriptsDir, entryClass);
@@ -70,6 +72,13 @@ class Pipeline {
                     targetDir.resolve("serial.ll").toString());
         }
 
+        if (usesMillis) {
+            System.out.println("[5c/6] Compiling time.ll → time.o ...");
+            run("llc-18", "-march=avr", "-mcpu=" + mcu, "-filetype=obj",
+                    "-o", outputDir.resolve("time.o").toString(),
+                    targetDir.resolve("time.ll").toString());
+        }
+
         System.out.println("[6/6] Linking → " + entryClass + ".elf ...");
         List<String> linkArgs = new ArrayList<>(Arrays.asList(
                 "avr-ld",
@@ -79,6 +88,7 @@ class Pipeline {
                 outputDir.resolve("gpio.o").toString(),
                 outputDir.resolve("delay.o").toString()));
         if (usesSerial) linkArgs.add(outputDir.resolve("serial.o").toString());
+        if (usesMillis) linkArgs.add(outputDir.resolve("time.o").toString());
         linkArgs.add("-o");
         linkArgs.add(outputDir.resolve(entryClass + ".elf").toString());
         run(linkArgs.toArray(new String[0]));

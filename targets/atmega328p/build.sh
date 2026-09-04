@@ -110,6 +110,16 @@ llc-18 -march=avr -mcpu=$MCU -filetype=obj \
 echo "[6b/8] Assembling random.S → random_asm.o ..."
 avr-as -mmcu=$MCU "$TARGET_DIR/random.S" -o "$BUILD_DIR/random_asm.o"
 
+# ---- Step 6c: compile time.ll if millis() is used ----
+TIME_OBJ=""
+if grep -q "@__espressomachine_time_millis" "$OUTPUT_LL" 2>/dev/null; then
+    echo "[6c/8] Compiling time.ll → time.o ..."
+    llc-18 -march=avr -mcpu=$MCU -filetype=obj \
+        -o "$BUILD_DIR/time.o" \
+        "$TARGET_DIR/time.ll"
+    TIME_OBJ="$BUILD_DIR/time.o"
+fi
+
 # ---- Step 7: link ----
 echo "[7/8] Linking → ${ENTRY_CLASS}.elf ..."
 avr-ld -T "$SCRIPT_DIR/linker.ld" \
@@ -119,6 +129,7 @@ avr-ld -T "$SCRIPT_DIR/linker.ld" \
     "$BUILD_DIR/delay.o" \
     "$BUILD_DIR/random.o" \
     "$BUILD_DIR/random_asm.o" \
+    ${TIME_OBJ:+"$TIME_OBJ"} \
     -o "$BUILD_DIR/${ENTRY_CLASS}.elf"
 
 avr-objcopy -O ihex -R .eeprom \
