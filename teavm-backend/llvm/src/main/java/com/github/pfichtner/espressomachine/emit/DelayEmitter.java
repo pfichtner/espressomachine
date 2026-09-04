@@ -2,6 +2,7 @@ package com.github.pfichtner.espressomachine.emit;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import org.teavm.model.Variable;
@@ -62,24 +63,20 @@ public class DelayEmitter {
                                  Map<Integer, String> constVars,
                                  Map<Integer, String> objectRefs,
                                  Function<Variable, String> resolveVar) {
-        String unitGlobal = (args.size() > 1) ? objectRefs.get(args.get(1).getIndex()) : null;
-        Integer denominator = null;   // unit < 1 ms (nanos/micros)
-        long multiplier = 1;          // unit >= 1 ms
-        if (unitGlobal != null) {
-            String unit = unitGlobal.substring(unitGlobal.lastIndexOf('_') + 1);
-            switch (unit) {
-                case "NANOSECONDS"  -> denominator = 1_000_000;
-                case "MICROSECONDS" -> denominator = 1_000;
-                case "MILLISECONDS" -> { }
-                case "SECONDS"      -> multiplier = 1_000;
-                case "MINUTES"      -> multiplier = 60_000;
-                case "HOURS"        -> multiplier = 3_600_000;
-                case "DAYS"         -> multiplier = 86_400_000;
-                default -> unitGlobal = null;
+        TimeUnit tu = null;
+        if (args.size() > 1) {
+            String unitGlobal = objectRefs.get(args.get(1).getIndex());
+            if (unitGlobal != null) {
+                String unit = unitGlobal.substring(unitGlobal.lastIndexOf('_') + 1);
+                try {
+                    tu = TimeUnit.valueOf(unit);
+                } catch (IllegalArgumentException e) {
+                    // not a known TimeUnit constant — fall through to runtime fallback
+                }
             }
         }
 
-        if (unitGlobal == null) {
+        if (tu == null) {
             // Unknown (non-constant) unit — generic runtime fallback.
             w.callVoid("__espressomachine_delay_time",
                     resolveVar.apply(args.get(0)), resolveVar.apply(args.get(1)));
@@ -89,21 +86,22 @@ public class DelayEmitter {
         Integer amount = constInt(args.get(0), constVars);
         if (amount != null) {
             // Constant amount + constant unit → statically calculated millis.
-            long millis = (denominator != null) ? amount / denominator : amount * multiplier;
-            w.callVoid("__espressomachine_delay_ms", millis);
+            w.callVoid("__espressomachine_delay_ms", TimeUnit.MILLISECONDS.convert(amount, tu));
             return;
         }
 
         // Runtime amount (i64) with a known unit — scale inline to milliseconds.
+        long nanosPerUnit = tu.toNanos(1);
+        long nanosPerMs   = TimeUnit.MILLISECONDS.toNanos(1);
         String tmp = w.temp();
         w.trunc64to32(tmp, resolveVar.apply(args.get(0)));
-        if (denominator != null) {
+        if (nanosPerUnit < nanosPerMs) {
             String tmp2 = w.temp();
-            w.sdiv32(tmp2, tmp, denominator);
+            w.sdiv32(tmp2, tmp, (int) (nanosPerMs / nanosPerUnit));
             tmp = tmp2;
-        } else if (multiplier != 1) {
+        } else if (nanosPerUnit > nanosPerMs) {
             String tmp2 = w.temp();
-            w.mul32(tmp2, tmp, (int) multiplier);
+            w.mul32(tmp2, tmp, (int) (nanosPerUnit / nanosPerMs));
             tmp = tmp2;
         }
         w.callVoid("__espressomachine_delay_ms", tmp);
