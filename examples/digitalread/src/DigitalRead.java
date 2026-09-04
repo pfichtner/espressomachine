@@ -7,6 +7,13 @@ class DigitalRead {
     }
 
     static void loop() {
-        GPIO.digitalWrite(13, GPIO.digitalRead(2));
+        if (GPIO.digitalRead(2) == GPIO.HIGH) {
+            GPIO.digitalWrite(13, GPIO.HIGH);
+            Delay.ms(200);
+            GPIO.digitalWrite(13, GPIO.LOW);
+            Delay.ms(200);
+        } else {
+            GPIO.digitalWrite(13, GPIO.LOW);
+        }
     }
 }
