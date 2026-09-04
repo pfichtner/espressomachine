@@ -193,6 +193,18 @@ run_hex_test "setup-loop-hex" \
     "ArduinoBlink" \
     "$APPROVED_DIR/setup-loop.hex"
 
+run_ll_test "analog-read" \
+    "examples/analog-read/target/classes:$API_CLASSES" \
+    "AnalogRead"
+
+run_ll_test "analog-blink" \
+    "examples/analog-blink/target/classes:$API_CLASSES" \
+    "AnalogBlink"
+
+run_ll_test "pwm-fade" \
+    "examples/pwm-fade/target/classes:$API_CLASSES" \
+    "PwmFade"
+
 # ------------------------------------------------------------------
 # System integration test (requires Docker + Node.js + AVR toolchain)
 # ------------------------------------------------------------------
@@ -232,6 +244,19 @@ if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-serial" ]]; th
     if [[ "$FILTER" == "systemtest-serial" || -z "$FILTER" ]]; then
         echo "[systemtest-serial]"
         if bash tests/systemtest-serial.sh; then
+            echo "  PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "  FAIL"
+            FAIL=$((FAIL + 1))
+        fi
+    fi
+fi
+
+if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-analog" ]]; then
+    if [[ "$FILTER" == "systemtest-analog" || -z "$FILTER" ]]; then
+        echo "[systemtest-analog]"
+        if bash tests/systemtest-analog.sh; then
             echo "  PASS"
             PASS=$((PASS + 1))
         else

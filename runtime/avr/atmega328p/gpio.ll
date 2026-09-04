@@ -47,6 +47,90 @@ set_in:
   ret void
 }
 
+; ATmega328P analog register map:
+;   ADMUX  = 0x7C (124)  ADC multiplexer / reference select
+;   ADCSRA = 0x7A (122)  ADC control and status A
+;   ADCL   = 0x78 (120)  ADC result low byte (must be read first)
+;   ADCH   = 0x79 (121)  ADC result high byte
+
+define i32 @__espressomachine_gpio_analogread(i32 %pin) {
+entry:
+  %chan   = and i32 %pin, 7
+  %chan8  = trunc i32 %chan to i8
+  %admux  = or i8 %chan8, 64            ; REFS0 (bit 6) = AVcc reference
+  store volatile i8 %admux, ptr inttoptr (i16 124 to ptr)
+  %cur    = load volatile i8, ptr inttoptr (i16 122 to ptr)
+  %start  = or i8 %cur, -57            ; ADEN(7)|ADSC(6)|ADPS2(2)|ADPS1(1)|ADPS0(0)
+  store volatile i8 %start, ptr inttoptr (i16 122 to ptr)
+  br label %poll
+poll:
+  %st     = load volatile i8, ptr inttoptr (i16 122 to ptr)
+  %adsc   = and i8 %st, 64
+  %busy   = icmp ne i8 %adsc, 0
+  br i1 %busy, label %poll, label %done
+done:
+  %lo     = load volatile i8, ptr inttoptr (i16 120 to ptr)  ; ADCL
+  %hi     = load volatile i8, ptr inttoptr (i16 121 to ptr)  ; ADCH
+  %lo32   = zext i8 %lo to i32
+  %hi32   = zext i8 %hi to i32
+  %hish   = shl i32 %hi32, 8
+  %result = or i32 %lo32, %hish
+  ret i32 %result
+}
+
+; PWM-capable Arduino pins and their timer register addresses.
+;
+; Pin  Timer  TCCRxA  COM bits  OCR addr
+;   3  T2/B    0xB0    0x20      0xB4
+;   5  T0/B    0x44    0x20      0x48
+;   6  T0/A    0x44    0x80      0x47
+;   9  T1/A    0x80    0x80      0x88
+;  10  T1/B    0x80    0x20      0x8A
+;  11  T2/A    0xB0    0x80      0xB3
+;
+; TCCRxA COM bits enable the compare-output pin in fast-PWM mode.
+; The prescaler and WGM bits in TCCRxB are assumed to be set by user startup code.
+
+@__pwm_pin  = private constant [6 x i8]  [i8  3, i8  5, i8  6, i8  9, i8 10, i8 11]
+@__pwm_tccr = private constant [6 x i16] [i16 176, i16 68, i16 68, i16 128, i16 128, i16 176]
+@__pwm_com  = private constant [6 x i8]  [i8 32, i8 32, i8 -128, i8 -128, i8 32, i8 -128]
+@__pwm_ocr  = private constant [6 x i16] [i16 180, i16 72, i16 71, i16 136, i16 138, i16 179]
+
+define void @__espressomachine_gpio_analogWrite(i32 %pin, i32 %value) {
+entry:
+  %pin8   = trunc i32 %pin to i8
+  %duty   = trunc i32 %value to i8
+  br label %loop
+loop:
+  %idx    = phi i32 [ 0, %entry ], [ %next, %no_match ]
+  %done   = icmp eq i32 %idx, 6
+  br i1 %done, label %exit, label %check
+check:
+  %p_ptr  = getelementptr [6 x i8], ptr @__pwm_pin, i32 0, i32 %idx
+  %p      = load i8, ptr %p_ptr
+  %match  = icmp eq i8 %p, %pin8
+  br i1 %match, label %write, label %no_match
+write:
+  %tc_ptr = getelementptr [6 x i16], ptr @__pwm_tccr, i32 0, i32 %idx
+  %tc_a   = load i16, ptr %tc_ptr
+  %tc_ptr2 = inttoptr i16 %tc_a to ptr
+  %tccr   = load volatile i8, ptr %tc_ptr2
+  %com_p  = getelementptr [6 x i8], ptr @__pwm_com, i32 0, i32 %idx
+  %com    = load i8, ptr %com_p
+  %new_tc = or i8 %tccr, %com
+  store volatile i8 %new_tc, ptr %tc_ptr2
+  %oc_ptr = getelementptr [6 x i16], ptr @__pwm_ocr, i32 0, i32 %idx
+  %oc_a   = load i16, ptr %oc_ptr
+  %oc_ptr2 = inttoptr i16 %oc_a to ptr
+  store volatile i8 %duty, ptr %oc_ptr2
+  ret void
+no_match:
+  %next   = add i32 %idx, 1
+  br label %loop
+exit:
+  ret void
+}
+
 define void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value) {
 entry:
   %port_idx = getelementptr [14 x i8], ptr @__pin_port, i32 0, i32 %pin

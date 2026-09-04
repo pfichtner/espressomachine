@@ -50,5 +50,8 @@
         <module>serial</module>
         <module>echo</module>
         <module>setup-loop</module>
+        <module>analog-read</module>
+        <module>analog-blink</module>
+        <module>pwm-fade</module>
     </modules>
 </project>

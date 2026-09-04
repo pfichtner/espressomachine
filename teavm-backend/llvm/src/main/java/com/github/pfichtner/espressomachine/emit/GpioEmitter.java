@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.teavm.model.BasicBlock;
+import org.teavm.model.Instruction;
 import org.teavm.model.Program;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.InvokeInstruction;
@@ -67,16 +69,39 @@ public class GpioEmitter implements IntrinsicEmitter {
         switch (method) {
             case "pinMode"      -> emitPinMode(w, args, constVars, resolveVar);
             case "digitalWrite" -> emitDigitalWrite(w, args, constVars, resolveVar);
+            case "analogRead"   -> emitAnalogRead(w, insn, args, resolveVar);
             default -> emitFallback(w, insn, args, resolveVar);
         }
         return w.tmpCounter();
     }
 
     public String declarations(Map<String, Program> programs) {
-        return """
+        String base = """
                 declare void @__espressomachine_gpio_pinmode(i32 %pin, i32 %mode)
                 declare void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value)
                 """;
+        if (!isAnalogUsedIn(programs)) return base;
+        return base + """
+                declare i32  @__espressomachine_gpio_analogread(i32 %pin)
+                declare void @__espressomachine_gpio_analogWrite(i32 %pin, i32 %value)
+                """;
+    }
+
+    private boolean isAnalogUsedIn(Map<String, Program> programs) {
+        for (Program prog : programs.values()) {
+            if (prog == null) continue;
+            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                BasicBlock bb = prog.basicBlockAt(bi);
+                if (bb == null) continue;
+                for (Instruction insn : bb) {
+                    if (insn instanceof InvokeInstruction inv && canHandle(inv.getMethod().getClassName())) {
+                        String name = inv.getMethod().getName();
+                        if ("analogRead".equals(name) || "analogWrite".equals(name)) return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     // ---- Internal helpers ----
@@ -133,6 +158,14 @@ public class GpioEmitter implements IntrinsicEmitter {
         }
         w.callVoid("__espressomachine_gpio_digitalwrite",
                 resolveVar.apply(args.get(0)), resolveVar.apply(args.get(1)));
+    }
+
+    private void emitAnalogRead(LlvmWriter w, InvokeInstruction insn,
+                               List<? extends Variable> args,
+                               Function<Variable, String> resolveVar) {
+        String recv = resolveVar.apply(insn.getReceiver());
+        w.callI32(recv, "__espressomachine_gpio_analogread",
+                args.stream().map(resolveVar).toArray());
     }
 
     private void emitFallback(LlvmWriter w, InvokeInstruction insn,
