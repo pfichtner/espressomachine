@@ -40,6 +40,7 @@
     <modules>
         <module>../runtime/api</module>
         <module>add</module>
+        <module>percent</module>
         <module>blink</module>
         <module>controlflow</module>
         <module>delay-time</module>

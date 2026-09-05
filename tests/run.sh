@@ -117,6 +117,18 @@ run_ll_test "add" \
     "examples/add/target/classes" \
     "Add"
 
+# Phase 1: arithmetic — multiply and divide (90% of value)
+# IR test: confirms mul i32 + sdiv i32 are emitted by the transform.
+# Hex test: confirms __divsi3 from intdiv.ll resolves at link time.
+run_ll_test "percent" \
+    "examples/percent/target/classes" \
+    "Percent"
+
+run_hex_test "percent-hex" \
+    "examples/percent/target/classes" \
+    "Percent" \
+    "$APPROVED_DIR/percent.hex"
+
 # Phase 1: control flow — if/else, while loop, PHI node
 run_ll_test "controlflow" \
     "examples/controlflow/target/classes" \
