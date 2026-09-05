@@ -240,6 +240,14 @@ public class IrDumper {
                         if (method.getProgram() == null) continue;
                         replaceMathInvokes(method.getProgram());
                     }
+                },
+                // Transformer 4: Replace Thread.sleep / TimeUnit.sleep with Delay.delay
+                (cls, ctx) -> {
+                    if (LlvmModuleEmitter.isJavaLangObject(cls.getName())) return;
+                    for (var method : cls.getMethods()) {
+                        if (method.getProgram() == null) continue;
+                        replaceThreadSleepInvokes(method.getProgram());
+                    }
                 }
             );
         }
@@ -332,6 +340,43 @@ public class IrDumper {
                             inv.setMethod(new MethodReference(MATH_BRIDGE_CLASS,
                                     MethodDescriptor.parse("mathSqrt(D)D")));
                         }
+                    }
+                }
+            }
+        }
+
+        private static final String DELAY_CLASS =
+                "com.github.pfichtner.espressomachine.api.Delay";
+
+        /**
+         * Walk a program and replace {@code Thread.sleep(long)} /
+         * {@code Thread.sleep(long,int)} with {@code Delay.delay(long)}, and
+         * {@code TimeUnit.sleep(long)} with {@code Delay.delay(long,TimeUnit)}.
+         */
+        private static void replaceThreadSleepInvokes(Program prog) {
+            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                BasicBlock bb = prog.basicBlockAt(bi);
+                if (bb == null) continue;
+                for (var it = bb.iterator(); it.hasNext(); ) {
+                    Instruction insn = it.next();
+                    if (!(insn instanceof InvokeInstruction inv)) continue;
+                    String className = inv.getMethod().getClassName();
+                    if ("java.lang.Thread".equals(className)
+                            && "sleep".equals(inv.getMethod().getName())) {
+                        // Thread.sleep(long) or Thread.sleep(long, int) → Delay.delay(long)
+                        inv.setArguments(inv.getArguments().get(0));
+                        inv.setMethod(new MethodReference(DELAY_CLASS,
+                                MethodDescriptor.parse("delay(J)V")));
+                    } else if ("java.util.concurrent.TimeUnit".equals(className)
+                            && "sleep".equals(inv.getMethod().getName())) {
+                        // TimeUnit.sleep(long) → Delay.delay(long, TimeUnit)
+                        Variable timeUnitVar = inv.getInstance();
+                        Variable timeoutVar = inv.getArguments().get(0);
+                        inv.setType(InvocationType.SPECIAL);
+                        inv.setInstance(null);
+                        inv.setArguments(timeoutVar, timeUnitVar);
+                        inv.setMethod(new MethodReference(DELAY_CLASS,
+                                MethodDescriptor.parse("delay(JLjava/util/concurrent/TimeUnit;)V")));
                     }
                 }
             }

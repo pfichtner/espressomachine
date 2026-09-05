@@ -11,6 +11,9 @@ public class Delay {
     /** Busy-wait for approximately {@code ms} milliseconds at 16 MHz. */
     public static native void delay(int ms);
 
+    /** Busy-wait for approximately {@code ms} milliseconds at 16 MHz. */
+    public static native void delay(long ms);
+
     /**
      * Busy-wait for the given duration expressed in {@code unit}.
      *

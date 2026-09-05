@@ -154,6 +154,11 @@ run_ll_test "delay-time" \
     "examples/delay-time/target/classes:$API_CLASSES" \
     "DelayTime"
 
+# Phase 4c: Thread.sleep / TimeUnit.sleep redirected to Delay.delay
+run_ll_test "thread-sleep" \
+    "examples/thread-sleep/target/classes:$API_CLASSES" \
+    "ThreadSleep"
+
 # Phase 5: full pipeline — Java → HEX via ATmega328P target
 run_hex_test "blink-hex" \
     "examples/blink/target/classes:$API_CLASSES" \

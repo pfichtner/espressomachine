@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import org.teavm.model.Program;
+import org.teavm.model.ValueType;
 import org.teavm.model.Variable;
 import org.teavm.model.instructions.InvokeInstruction;
 
@@ -39,8 +40,14 @@ public class DelayEmitter implements IntrinsicEmitter {
         List<? extends Variable> args = insn.getArguments();
         switch (method) {
             case "delay" -> {
-                if (args.size() == 1) emitMs(writer, args, resolveVar);
-                else                  emitTime(writer, args, constVars, objectRefs, resolveVar);
+                if (args.size() == 1) {
+                    boolean isLong = ValueType.LONG.equals(
+                            insn.getMethod().getDescriptor().parameterType(0));
+                    if (isLong) emitMsLong(writer, args, resolveVar);
+                    else        emitMs(writer, args, resolveVar);
+                } else {
+                    emitTime(writer, args, constVars, objectRefs, resolveVar);
+                }
             }
             default -> emitFallback(writer, insn, args, resolveVar);
         }
@@ -58,6 +65,13 @@ public class DelayEmitter implements IntrinsicEmitter {
     private void emitMs(LlvmWriter writer, List<? extends Variable> args,
                         Function<Variable, String> resolveVar) {
         writer.callVoid("__espressomachine_delay_ms", resolveVar.apply(args.get(0)));
+    }
+
+    private void emitMsLong(LlvmWriter writer, List<? extends Variable> args,
+                             Function<Variable, String> resolveVar) {
+        String tmp = writer.temp();
+        writer.trunc64to32(tmp, resolveVar.apply(args.get(0)));
+        writer.callVoid("__espressomachine_delay_ms", tmp);
     }
 
     private void emitTime(LlvmWriter w, List<? extends Variable> args,
