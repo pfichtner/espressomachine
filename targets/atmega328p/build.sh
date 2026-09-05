@@ -103,6 +103,13 @@ llc-18 -march=avr -mcpu=$MCU -filetype=obj \
     -o "$BUILD_DIR/delay.o" \
     "$CALIBRATED_DELAY"
 
+# ---- Step 5b: compile intdiv.ll (integer division helpers) ----
+echo "[5b/8] Compiling intdiv.ll → intdiv.o ..."
+llc-18 -march=avr -mcpu=$MCU -filetype=obj \
+    -function-sections -data-sections \
+    -o "$BUILD_DIR/intdiv.o" \
+    "$TARGET_DIR/intdiv.ll"
+
 # ---- Step 6: compile random.ll runtime ----
 echo "[6/8] Compiling random.ll → random.o ..."
 llc-18 -march=avr -mcpu=$MCU -filetype=obj \
@@ -131,6 +138,7 @@ avr-ld --gc-sections -T "$SCRIPT_DIR/linker.ld" \
     "$BUILD_DIR/startup.o" \
     "$BUILD_DIR/${ENTRY_CLASS}.o" \
     "$BUILD_DIR/gpio.o" \
+    "$BUILD_DIR/intdiv.o" \
     "$BUILD_DIR/delay.o" \
     "$BUILD_DIR/random.o" \
     "$BUILD_DIR/random_asm.o" \
