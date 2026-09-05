@@ -23,124 +23,47 @@
 #
 # Exit 0 on success, non-zero on any failure.
 
+# shellcheck disable=SC2034,SC1091  # config consumed by tests/lib/systemtest-lib.sh, dynamic source path
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROG_NAME="Echo"
+ENTRY_CLASS="Echo"
+EXAMPLE_DIR="echo"
+APPROVED_HEX="echo.hex"
+CONTAINER_TAG="echo"
+STEPS=6
+ST_SERIAL=1
+ST_PAUSE=true
 
-IMAGE="${VIRTUALAVR_IMAGE:-pfichtner/virtualavr:latest}"
 BAUD="${SERIAL_BAUD:-9600}"
-BUILD_TIMEOUT="${BUILD_TIMEOUT:-180}"  # seconds to wait for device/WS readiness
 
-WS_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
-WS_URL="ws://localhost:$WS_PORT"
-CONTAINER="espressomachine-echo-$$"
-
-die() { echo "ERROR: $*" >&2; exit 1; }
-
-# ---------------------------------------------------------------------------
-# Cleanup on exit
-# ---------------------------------------------------------------------------
-cleanup() {
-    if [[ -n "${CONTAINER:-}" ]]; then
-        docker rm -f "$CONTAINER" > /dev/null 2>&1 || true
-    fi
-    if [[ -n "${WORK_DIR:-}" && -d "$WORK_DIR" ]]; then
-        rm -rf "$WORK_DIR"
-    fi
-}
-trap cleanup EXIT INT TERM
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/systemtest-lib.sh"
+st_init
 
 # ---------------------------------------------------------------------------
 # Find a free /dev/ttyUSBx slot (same logic as Ardulink environment.py)
 # ---------------------------------------------------------------------------
-SERIAL_DEVICE=""
-for n in $(seq 0 63); do
-    if [[ ! -e "/dev/ttyUSB$n" ]]; then
-        SERIAL_DEVICE="/dev/ttyUSB$n"
-        break
-    fi
-done
-[[ -n "$SERIAL_DEVICE" ]] || die "no free /dev/ttyUSB slot available (0-63 all in use)"
+st_find_serial_device
 
 # ---------------------------------------------------------------------------
 # Locate / build the Echo.hex
 # ---------------------------------------------------------------------------
-HEX_FILE="${1:-}"
-WORK_DIR=$(mktemp -d)
-
-if [[ -z "$HEX_FILE" ]]; then
-    HEX_FILE="$WORK_DIR/Echo.hex"
-    echo "[1/6] Building Echo.hex via EspressoMachine..."
-    if ! command -v javac > /dev/null 2>&1 || ! command -v avr-ld > /dev/null 2>&1; then
-        echo "    (AVR toolchain not installed; using approved hex tests/approved/echo.hex)"
-        cp "$REPO_ROOT/tests/approved/echo.hex" "$HEX_FILE"
-    else
-        mvn compile -q -f "$REPO_ROOT/examples/pom.xml"
-        if (cd "$REPO_ROOT" && ./bin/espressomachine build \
-            --cp "examples/echo/target/classes:runtime/api/target/classes" \
-            Echo \
-            --target atmega328p \
-            --output "$WORK_DIR/build" > /dev/null 2>&1) && [[ -f "$WORK_DIR/build/Echo.hex" ]]; then
-            cp "$WORK_DIR/build/Echo.hex" "$HEX_FILE"
-        else
-            echo "    (CLI build failed; using approved hex tests/approved/echo.hex)"
-            cp "$REPO_ROOT/tests/approved/echo.hex" "$HEX_FILE"
-        fi
-    fi
-fi
-
-[[ -f "$HEX_FILE" ]] || die "HEX file not found: $HEX_FILE"
-echo "[1/6] Using HEX: $HEX_FILE"
+st_find_hex "${1:-}"
 
 # ---------------------------------------------------------------------------
 # Start virtualavr with /dev bind-mount so the PTY appears on the host.
 # ---------------------------------------------------------------------------
-echo "[2/6] Starting virtualavr container ($IMAGE)..."
-echo "      Serial device: $SERIAL_DEVICE @ ${BAUD} baud"
-docker create --name "$CONTAINER" \
-    --volume /dev:/dev \
-    -p "$WS_PORT:8080" \
-    -e FILENAME=/Echo.hex \
-    -e VIRTUALDEVICE="$SERIAL_DEVICE" \
-    -e BAUDRATE="$BAUD" \
-    -e DEVICEUSER="$(id -u)" \
-    -e PAUSE_ON_START=true \
-    "$IMAGE" > /dev/null 2>&1 || die "failed to create virtualavr container"
-docker cp "$HEX_FILE" "$CONTAINER:/Echo.hex" > /dev/null || die "failed to copy HEX into container"
-docker start "$CONTAINER" > /dev/null 2>&1 || die "failed to start virtualavr container"
+st_start_container
 
 # ---------------------------------------------------------------------------
 # Wait for the WebSocket endpoint to become reachable
 # ---------------------------------------------------------------------------
-echo "[3/6] Waiting for WebSocket endpoint at $WS_URL ..."
-DEADLINE=$(( $(date +%s) + BUILD_TIMEOUT ))
-until timeout 2 websocat "$WS_URL" < /dev/null > /dev/null 2>&1; do
-    if [[ $(date +%s) -gt $DEADLINE ]]; then
-        echo "Container logs:" >&2
-        docker logs "$CONTAINER" >&2 2>&1 || true
-        die "Timed out waiting for WebSocket endpoint to become ready"
-    fi
-    sleep 1
-done
-echo "    WebSocket endpoint is ready."
+st_wait_ws
 
 # ---------------------------------------------------------------------------
 # Wait for the PTY device to appear on the host
 # ---------------------------------------------------------------------------
-echo "[4/6] Waiting for serial device $SERIAL_DEVICE ..."
-until [[ -e "$SERIAL_DEVICE" ]]; do
-    if [[ $(date +%s) -gt $DEADLINE ]]; then
-        echo "Container logs:" >&2
-        docker logs "$CONTAINER" >&2 2>&1 || true
-        die "Timed out waiting for $SERIAL_DEVICE to appear"
-    fi
-    sleep 1
-done
-echo "    Device is ready."
-
-# Configure the PTY: raw mode, no echo, 8N1.
-stty -F "$SERIAL_DEVICE" "$BAUD" raw -echo cs8 -parenb -cstopb clocal
+st_wait_serial_device
 
 # ---------------------------------------------------------------------------
 # Start capturing AVR output, unpause, then send test bytes
@@ -157,7 +80,7 @@ CAT_PID=$!
 printf '{"type":"control","action":"unpause"}\n' \
     | timeout 5 websocat "$WS_URL" > /dev/null 2>&1 || true
 
-echo "[5/6] Sending test bytes and waiting for echo..."
+st_step "Sending test bytes and waiting for echo..."
 # Allow the AVR to reach its read loop, then send five 'A' bytes.
 sleep 1
 printf 'AAAAA' > "$SERIAL_DEVICE"
@@ -169,9 +92,7 @@ wait "$CAT_PID" 2>/dev/null || true
 count=$(tr -cd 'A' < "$ECHO_OUT" | wc -c)
 
 if [[ "${count:-0}" -lt 3 ]]; then
-    echo "Container logs:" >&2
-    docker logs "$CONTAINER" >&2 2>&1 || true
-    die "Echo verification failed: got ${count:-0} 'A' bytes back, need 3"
+    st_logs_and_die "Echo verification failed: got ${count:-0} 'A' bytes back, need 3"
 fi
 
-echo "[6/6] Success: Serial.available()/read() correctly echo received bytes."
+st_step "Success: Serial.available()/read() correctly echo received bytes."
