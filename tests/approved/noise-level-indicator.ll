@@ -44,32 +44,24 @@ BB1:
   call void @__espressomachine_gpio_pinmode(i32 %v2, i32 1)
   br label %BB2
 BB2:
-  %gep1 = getelementptr %NoiseLevelIndicator_t, ptr %v0, i32 0, i32 1
-  %v3 = load ptr, ptr %gep1
-  %v4 = add i32 0, 13
-  %v5 = add i32 0, 1
-  call void @com_github_pfichtner_espressomachine_api_Gpio_digitalWrite(ptr %v3, i32 13, i32 1)
+  %v3 = add i32 0, 13
+  %v4 = add i32 0, 1
+  %_t1 = load volatile i8, ptr inttoptr (i16 37 to ptr)
+  %_t2 = or i8 %_t1, 32
+  store volatile i8 %_t2, ptr inttoptr (i16 37 to ptr)
   ; init_class java.util.concurrent.TimeUnit
-  %v6 = getelementptr i8, ptr @java_util_concurrent_TimeUnit_MILLISECONDS, i32 0
-  %v7 = add i64 0, 500
+  %v5 = getelementptr i8, ptr @java_util_concurrent_TimeUnit_MILLISECONDS, i32 0
+  %v6 = add i64 0, 500
   call void @__espressomachine_delay_ms(i32 500)
-  %gep2 = getelementptr %NoiseLevelIndicator_t, ptr %v0, i32 0, i32 1
-  %v8 = load ptr, ptr %gep2
-  %v9 = add i32 0, 13
-  %v10 = add i32 0, 0
-  call void @com_github_pfichtner_espressomachine_api_Gpio_digitalWrite(ptr %v8, i32 13, i32 0)
-  %v11 = getelementptr i8, ptr @java_util_concurrent_TimeUnit_MILLISECONDS, i32 0
-  %v12 = add i64 0, 500
+  %v7 = add i32 0, 13
+  %v8 = add i32 0, 0
+  %_t3 = load volatile i8, ptr inttoptr (i16 37 to ptr)
+  %_t4 = and i8 %_t3, 223
+  store volatile i8 %_t4, ptr inttoptr (i16 37 to ptr)
+  %v9 = getelementptr i8, ptr @java_util_concurrent_TimeUnit_MILLISECONDS, i32 0
+  %v10 = add i64 0, 500
   call void @__espressomachine_delay_ms(i32 500)
   br label %BB2
-}
-
-define void @com_github_pfichtner_espressomachine_api_Gpio_digitalWrite(ptr %v0, i32 %v1, i32 %v2) {
-BB0:
-  br label %BB1
-BB1:
-  call void @__espressomachine_gpio_digitalwrite(i32 %v1, i32 %v2)
-  ret void
 }
 
 
