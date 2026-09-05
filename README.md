@@ -347,7 +347,7 @@ Configuration via environment variables:
 | 4 | Embedded intrinsics — GPIO / Delay API, PORTB/DDRB MMIO inlining |
 | 5 | ATmega328P target — startup, linker, `avr-ld`, produces flashable HEX |
 | 6 | First Blink — `Blink.hex` 332 bytes, `sbi`/`cbi` verified by disassembly |
-| 7 | OOP Blink — `Led` class with constructor, fields, instance methods; 668 bytes (two-LED alternating blink) |
+| 7 | OOP Blink — `Led` class with constructor, fields, instance methods; single-LED version 272 bytes (identical to imperative Blink, proving zero-overhead abstraction); current example alternates two LEDs: 668 bytes |
 | CLI | `espressomachine build / inspect / emit-llvm / flash` |
 | 8 | Serial, ADC, PWM, Random, java.lang.Math, java.util.Random |
 | 9 | `GPIO.digitalRead` + `INPUT_PULLUP`, `Functions.map/constrain`, `Time.millis()` |
