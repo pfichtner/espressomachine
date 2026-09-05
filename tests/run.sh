@@ -105,6 +105,22 @@ run_hex_test() {
     fi
 }
 
+# Run a Maven test: compile + run JUnit tests for one module inside the reactor.
+run_mvn_test() {
+    local name="$1" module="$2"
+    [[ -n "$FILTER" && "$name" != "$FILTER" ]] && { SKIP=$((SKIP + 1)); return 0; }
+    echo "[$name]"
+    local log="$ACTUAL_DIR/${name}.txt"
+    if mvn test -q -f examples/pom.xml -pl "$module" --also-make > "$log" 2>&1; then
+        echo "  PASS"
+        PASS=$((PASS + 1))
+    else
+        echo "  FAIL"
+        tail -40 "$log"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 # ------------------------------------------------------------------
 # Test cases
 # ------------------------------------------------------------------
@@ -174,6 +190,15 @@ run_hex_test "oop-blink-hex" \
     "examples/oop-blink/target/classes:$API_CLASSES" \
     "OopBlink" \
     "$APPROVED_DIR/oop-blink.hex"
+
+# Mockable Gpio wrapper: AVR path devirtualises gpio.x() to GPIO intrinsics;
+# JVM path allows mocking with Mockito + Awaitility for unit testing.
+run_ll_test "noise-level-indicator" \
+    "examples/noise-level-indicator/target/classes:$API_CLASSES" \
+    "NoiseLevelIndicator"
+
+run_mvn_test "noise-level-indicator-jvm" \
+    "noise-level-indicator"
 
 # Enum support: Direction (ordinal, ==, if-else), Pin (custom field)
 run_ll_test "enum" \
