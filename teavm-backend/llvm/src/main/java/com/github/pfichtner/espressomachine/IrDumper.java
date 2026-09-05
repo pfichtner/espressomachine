@@ -248,6 +248,14 @@ public class IrDumper {
                         if (method.getProgram() == null) continue;
                         replaceThreadSleepInvokes(method.getProgram());
                     }
+                },
+                // Transformer 5: Inline Gpio wrapper calls → GPIO static intrinsics
+                (cls, ctx) -> {
+                    if (LlvmModuleEmitter.isJavaLangObject(cls.getName())) return;
+                    for (var method : cls.getMethods()) {
+                        if (method.getProgram() == null) continue;
+                        replaceGpioWrapperInvokes(method.getProgram());
+                    }
                 }
             );
         }
@@ -341,6 +349,30 @@ public class IrDumper {
                                     MethodDescriptor.parse("mathSqrt(D)D")));
                         }
                     }
+                }
+            }
+        }
+
+        private static final String GPIO_CLASS =
+                "com.github.pfichtner.espressomachine.api.GPIO";
+        private static final String GPIO_WRAPPER_CLASS =
+                "com.github.pfichtner.espressomachine.api.Gpio";
+
+        /** Rewrite {@code gpio.x(args)} → {@code GPIO.x(args)} so the Gpio wrapper
+         *  allocation becomes dead and is eliminated before escape analysis runs. */
+        private static void replaceGpioWrapperInvokes(Program prog) {
+            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                BasicBlock bb = prog.basicBlockAt(bi);
+                if (bb == null) continue;
+                for (var it = bb.iterator(); it.hasNext(); ) {
+                    Instruction insn = it.next();
+                    if (!(insn instanceof InvokeInstruction inv)) continue;
+                    if (!GPIO_WRAPPER_CLASS.equals(inv.getMethod().getClassName())) continue;
+                    if ("<init>".equals(inv.getMethod().getName())) continue;
+                    inv.setType(InvocationType.SPECIAL);
+                    inv.setInstance(null);
+                    inv.setMethod(new MethodReference(GPIO_CLASS,
+                            inv.getMethod().getDescriptor()));
                 }
             }
         }
