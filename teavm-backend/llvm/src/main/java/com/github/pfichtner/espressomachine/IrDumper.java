@@ -461,7 +461,7 @@ public class IrDumper {
             // ---- Phase C: final class set ----
             System.out.println();
             System.out.println("=== Final class set ===");
-            List<String> classNames = new ArrayList<>(classes.getClassNames());
+            List<String> classNames = new ArrayList<String>(classes.getClassNames());
             Collections.sort(classNames);
             for (String className : classNames) {
                 ClassHolder cls = classes.get(className);
