@@ -5,6 +5,7 @@ class Led {
 
     Led(int pin) {
         this.pin = pin;
+        GPIO.pinMode(pin, GPIO.OUTPUT);
     }
 
     void on() {
