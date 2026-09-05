@@ -30,6 +30,7 @@
 #   ws_unpause_msg                     - print control/unpause JSON line
 #   st_ws_unpause                      - send unpause and discard reply
 #   st_count_pin_toggles <pin>         - stdin filter: count HIGH<->LOW transitions
+#   st_wait_ack <id>                   - block until <id> appears in $ACK_FILE
 
 set -euo pipefail
 
@@ -193,6 +194,10 @@ ws_unpause_msg() {
 
 st_ws_unpause() {
     ws_unpause_msg | timeout 5 websocat "$WS_URL" > /dev/null 2>&1 || true
+}
+
+st_wait_ack() {             # st_wait_ack <id>
+    until grep -q "$1" "$ACK_FILE" 2>/dev/null; do sleep 0.05; done
 }
 
 # Reads websocat output from stdin; prints count of HIGH<->LOW transitions for <pin>.

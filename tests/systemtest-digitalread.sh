@@ -86,13 +86,13 @@ sub_id=$(uuidgen); low_id=$(uuidgen); high_id=$(uuidgen)
 toggles=$(
     (
         ws_pin_subscribe "$LED_PIN" "$sub_id"
-        until grep -q "$sub_id" "$ACK_FILE" 2>/dev/null; do sleep 0.05; done
+        st_wait_ack "$sub_id"
 
         ws_pin_inject "$BTN_PIN" false "$low_id"
-        until grep -q "$low_id" "$ACK_FILE" 2>/dev/null; do sleep 0.05; done
+        st_wait_ack "$low_id"
 
         ws_pin_inject "$BTN_PIN" true "$high_id"
-        until grep -q "$high_id" "$ACK_FILE" 2>/dev/null; do sleep 0.05; done
+        st_wait_ack "$high_id"
 
         sleep "$WAIT_TIMEOUT"
     ) | websocat "$WS_URL" 2>/dev/null \
