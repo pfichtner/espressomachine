@@ -29,85 +29,40 @@
 #
 # Exit 0 on success, non-zero on any failure.
 
+# shellcheck disable=SC2034,SC1091  # config consumed by tests/lib/systemtest-lib.sh, dynamic source path
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROG_NAME="DigitalRead"
+ENTRY_CLASS="DigitalRead"
+EXAMPLE_DIR="digitalread"
+APPROVED_HEX="digitalread.hex"
+CONTAINER_TAG="digitalread"
+STEPS=5
 
-IMAGE="${VIRTUALAVR_IMAGE:-pfichtner/virtualavr:latest}"
 LED_PIN="${LED_PIN:-13}"
 BTN_PIN="${BTN_PIN:-2}"
 WAIT_TIMEOUT="${DR_TIMEOUT:-5}"
 TOGGLE_MIN="${DR_TOGGLES:-4}"      # ≥4 blink edges in 5 s; blink = 400 ms/cycle → ~12 edges
-BUILD_TIMEOUT="${BUILD_TIMEOUT:-180}"
 
-WS_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
-WS_URL="ws://localhost:$WS_PORT"
-CONTAINER="espressomachine-digitalread-$$"
-WORK_DIR=$(mktemp -d)
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/systemtest-lib.sh"
+st_init
+
 ACK_FILE=$(mktemp)
-
-cleanup() {
-    docker rm -f "$CONTAINER" > /dev/null 2>&1 || true
-    rm -rf "$WORK_DIR" "$ACK_FILE"
-}
-trap cleanup EXIT INT TERM
-
-die() { echo "ERROR: $*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
 # Locate / build the DigitalRead.hex
 # ---------------------------------------------------------------------------
-HEX_FILE="${1:-}"
-
-if [[ -z "$HEX_FILE" ]]; then
-    HEX_FILE="$WORK_DIR/DigitalRead.hex"
-    echo "[1/5] Building DigitalRead.hex via EspressoMachine..."
-    if ! command -v javac > /dev/null 2>&1 || ! command -v avr-ld > /dev/null 2>&1; then
-        echo "    (AVR toolchain not installed; using approved hex tests/approved/digitalread.hex)"
-        cp "$REPO_ROOT/tests/approved/digitalread.hex" "$HEX_FILE"
-    else
-        mvn compile -q -f "$REPO_ROOT/examples/pom.xml"
-        if (cd "$REPO_ROOT" && ./bin/espressomachine build \
-            --cp "examples/digitalread/target/classes:runtime/api/target/classes" \
-            DigitalRead \
-            --target atmega328p \
-            --output "$WORK_DIR/build" > /dev/null 2>&1) && [[ -f "$WORK_DIR/build/DigitalRead.hex" ]]; then
-            cp "$WORK_DIR/build/DigitalRead.hex" "$HEX_FILE"
-        else
-            echo "    (CLI build failed; using approved hex tests/approved/digitalread.hex)"
-            cp "$REPO_ROOT/tests/approved/digitalread.hex" "$HEX_FILE"
-        fi
-    fi
-fi
-
-[[ -f "$HEX_FILE" ]] || die "HEX file not found: $HEX_FILE"
-echo "[1/5] Using HEX: $HEX_FILE"
+st_find_hex "${1:-}"
 
 # ---------------------------------------------------------------------------
 # Start virtualavr container
 # ---------------------------------------------------------------------------
-echo "[2/5] Starting virtualavr container ($IMAGE)..."
-docker create --name "$CONTAINER" \
-    -p "$WS_PORT:8080" \
-    -e FILENAME=/DigitalRead.hex \
-    "$IMAGE" > /dev/null 2>&1 || die "failed to create virtualavr container"
-docker cp "$HEX_FILE" "$CONTAINER:/DigitalRead.hex" > /dev/null || die "failed to copy HEX into container"
-docker start "$CONTAINER" > /dev/null 2>&1 || die "failed to start virtualavr container"
+st_start_container
 
 # ---------------------------------------------------------------------------
 # Wait for WebSocket endpoint
 # ---------------------------------------------------------------------------
-echo "[3/5] Waiting for WebSocket endpoint at $WS_URL ..."
-DEADLINE=$(( $(date +%s) + BUILD_TIMEOUT ))
-until timeout 2 websocat "$WS_URL" < /dev/null > /dev/null 2>&1; do
-    if [[ $(date +%s) -gt $DEADLINE ]]; then
-        docker logs "$CONTAINER" >&2 2>&1 || true
-        die "Timed out waiting for WebSocket endpoint"
-    fi
-    sleep 1
-done
-echo "    WebSocket endpoint is ready."
+st_wait_ws
 
 # ---------------------------------------------------------------------------
 # Drive pin BTN_PIN HIGH and verify pin LED_PIN blinks.
@@ -125,7 +80,7 @@ echo "    WebSocket endpoint is ready."
 # the reader side-channel fills from received replyId messages; both run as
 # concurrent stages of the same bash pipeline.
 # ---------------------------------------------------------------------------
-echo "[4/5] Subscribing to pin $LED_PIN, injecting pin $BTN_PIN HIGH → expecting ≥${TOGGLE_MIN} blink edges in ${WAIT_TIMEOUT}s..."
+st_step "Subscribing to pin $LED_PIN, injecting pin $BTN_PIN HIGH → expecting ≥${TOGGLE_MIN} blink edges in ${WAIT_TIMEOUT}s..."
 
 toggles=$(
     (
@@ -151,9 +106,7 @@ toggles=$(
 ) || true
 
 if [[ "${toggles:-0}" -lt "$TOGGLE_MIN" ]]; then
-    echo "Container logs:" >&2
-    docker logs "$CONTAINER" >&2 2>&1 || true
-    die "Digital-read blink test failed: pin $LED_PIN toggled ${toggles:-0} times (need $TOGGLE_MIN). Pin $BTN_PIN injection may not have been applied."
+    st_logs_and_die "Digital-read blink test failed: pin $LED_PIN toggled ${toggles:-0} times (need $TOGGLE_MIN). Pin $BTN_PIN injection may not have been applied."
 fi
 
-echo "[5/5] Success: transpiled Java DigitalRead blinks pin $LED_PIN ${toggles} times when pin $BTN_PIN is HIGH."
+st_step "Success: transpiled Java DigitalRead blinks pin $LED_PIN ${toggles} times when pin $BTN_PIN is HIGH."

@@ -26,77 +26,34 @@
 #
 # Exit 0 on success, non-zero on any failure.
 
+# shellcheck disable=SC2034,SC1091  # config consumed by tests/lib/systemtest-lib.sh, dynamic source path
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROG_NAME="HelloSerial"
+ENTRY_CLASS="HelloSerial"
+EXAMPLE_DIR="serial"
+APPROVED_HEX="serial.hex"
+CONTAINER_TAG="serial"
+STEPS=6
+ST_SERIAL=1
+ST_PAUSE=true
 
-IMAGE="${VIRTUALAVR_IMAGE:-pfichtner/virtualavr:latest}"
 BAUD="${SERIAL_BAUD:-9600}"
 WAIT_TIMEOUT="${SERIAL_TIMEOUT:-30}"   # seconds to read from the serial device
 SERIAL_MIN="${SERIAL_MIN:-3}"          # minimum 'A' bytes required to pass
-BUILD_TIMEOUT="${BUILD_TIMEOUT:-180}"  # seconds to wait for device/WS readiness
 
-WS_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
-WS_URL="ws://localhost:$WS_PORT"
-CONTAINER="espressomachine-serial-$$"
-
-die() { echo "ERROR: $*" >&2; exit 1; }
-
-# ---------------------------------------------------------------------------
-# Cleanup on exit
-# ---------------------------------------------------------------------------
-cleanup() {
-    if [[ -n "${CONTAINER:-}" ]]; then
-        docker rm -f "$CONTAINER" > /dev/null 2>&1 || true
-    fi
-    if [[ -n "${WORK_DIR:-}" && -d "$WORK_DIR" ]]; then
-        rm -rf "$WORK_DIR"
-    fi
-}
-trap cleanup EXIT INT TERM
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/systemtest-lib.sh"
+st_init
 
 # ---------------------------------------------------------------------------
 # Find a free /dev/ttyUSBx slot (same logic as Ardulink environment.py)
 # ---------------------------------------------------------------------------
-SERIAL_DEVICE=""
-for n in $(seq 0 63); do
-    if [[ ! -e "/dev/ttyUSB$n" ]]; then
-        SERIAL_DEVICE="/dev/ttyUSB$n"
-        break
-    fi
-done
-[[ -n "$SERIAL_DEVICE" ]] || die "no free /dev/ttyUSB slot available (0-63 all in use)"
+st_find_serial_device
 
 # ---------------------------------------------------------------------------
 # Locate / build the HelloSerial.hex
 # ---------------------------------------------------------------------------
-HEX_FILE="${1:-}"
-WORK_DIR=$(mktemp -d)
-
-if [[ -z "$HEX_FILE" ]]; then
-    HEX_FILE="$WORK_DIR/HelloSerial.hex"
-    echo "[1/6] Building HelloSerial.hex via EspressoMachine..."
-    if ! command -v javac > /dev/null 2>&1 || ! command -v avr-ld > /dev/null 2>&1; then
-        echo "    (AVR toolchain not installed; using approved hex tests/approved/serial.hex)"
-        cp "$REPO_ROOT/tests/approved/serial.hex" "$HEX_FILE"
-    else
-        mvn compile -q -f "$REPO_ROOT/examples/pom.xml"
-        if (cd "$REPO_ROOT" && ./bin/espressomachine build \
-            --cp "examples/serial/target/classes:runtime/api/target/classes" \
-            HelloSerial \
-            --target atmega328p \
-            --output "$WORK_DIR/build" > /dev/null 2>&1) && [[ -f "$WORK_DIR/build/HelloSerial.hex" ]]; then
-            cp "$WORK_DIR/build/HelloSerial.hex" "$HEX_FILE"
-        else
-            echo "    (CLI build failed; using approved hex tests/approved/serial.hex)"
-            cp "$REPO_ROOT/tests/approved/serial.hex" "$HEX_FILE"
-        fi
-    fi
-fi
-
-[[ -f "$HEX_FILE" ]] || die "HEX file not found: $HEX_FILE"
-echo "[1/6] Using HEX: $HEX_FILE"
+st_find_hex "${1:-}"
 
 # ---------------------------------------------------------------------------
 # Start virtualavr with /dev bind-mount so the PTY appears on the host.
@@ -105,51 +62,17 @@ echo "[1/6] Using HEX: $HEX_FILE"
 # command, ensuring the serial port is open before the AVR writes any bytes.
 # DEVICEUSER=$(id -u) makes the PTY readable by the current user.
 # ---------------------------------------------------------------------------
-echo "[2/6] Starting virtualavr container ($IMAGE)..."
-echo "      Serial device: $SERIAL_DEVICE @ ${BAUD} baud"
-docker create --name "$CONTAINER" \
-    --volume /dev:/dev \
-    -p "$WS_PORT:8080" \
-    -e FILENAME=/HelloSerial.hex \
-    -e VIRTUALDEVICE="$SERIAL_DEVICE" \
-    -e BAUDRATE="$BAUD" \
-    -e DEVICEUSER="$(id -u)" \
-    -e PAUSE_ON_START=true \
-    "$IMAGE" > /dev/null 2>&1 || die "failed to create virtualavr container"
-docker cp "$HEX_FILE" "$CONTAINER:/HelloSerial.hex" > /dev/null || die "failed to copy HEX into container"
-docker start "$CONTAINER" > /dev/null 2>&1 || die "failed to start virtualavr container"
+st_start_container
 
 # ---------------------------------------------------------------------------
 # Wait for the WebSocket endpoint to become reachable
 # ---------------------------------------------------------------------------
-echo "[3/6] Waiting for WebSocket endpoint at $WS_URL ..."
-DEADLINE=$(( $(date +%s) + BUILD_TIMEOUT ))
-until timeout 2 websocat "$WS_URL" < /dev/null > /dev/null 2>&1; do
-    if [[ $(date +%s) -gt $DEADLINE ]]; then
-        echo "Container logs:" >&2
-        docker logs "$CONTAINER" >&2 2>&1 || true
-        die "Timed out waiting for WebSocket endpoint to become ready"
-    fi
-    sleep 1
-done
-echo "    WebSocket endpoint is ready."
+st_wait_ws
 
 # ---------------------------------------------------------------------------
 # Wait for the PTY device to appear on the host
 # ---------------------------------------------------------------------------
-echo "[4/6] Waiting for serial device $SERIAL_DEVICE ..."
-until [[ -e "$SERIAL_DEVICE" ]]; do
-    if [[ $(date +%s) -gt $DEADLINE ]]; then
-        echo "Container logs:" >&2
-        docker logs "$CONTAINER" >&2 2>&1 || true
-        die "Timed out waiting for $SERIAL_DEVICE to appear"
-    fi
-    sleep 1
-done
-echo "    Device is ready."
-
-# Configure the PTY: raw mode, no echo, 8N1.
-stty -F "$SERIAL_DEVICE" "$BAUD" raw -echo cs8 -parenb -cstopb clocal
+st_wait_serial_device
 
 # ---------------------------------------------------------------------------
 # Unpause the simulation now that the serial port is configured
@@ -160,14 +83,12 @@ printf '{"type":"control","action":"unpause"}\n' \
 # ---------------------------------------------------------------------------
 # Read WAIT_TIMEOUT seconds of serial output and count 'A' (0x41) bytes
 # ---------------------------------------------------------------------------
-echo "[5/6] Reading serial output for ${WAIT_TIMEOUT}s (need $SERIAL_MIN 'A' bytes)..."
+st_step "Reading serial output for ${WAIT_TIMEOUT}s (need $SERIAL_MIN 'A' bytes)..."
 count=$(timeout "$WAIT_TIMEOUT" cat "$SERIAL_DEVICE" 2>/dev/null \
     | tr -cd 'A' | wc -c) || true
 
 if [[ "${count:-0}" -lt "$SERIAL_MIN" ]]; then
-    echo "Container logs:" >&2
-    docker logs "$CONTAINER" >&2 2>&1 || true
-    die "Serial verification failed: received ${count:-0} 'A' bytes, need $SERIAL_MIN"
+    st_logs_and_die "Serial verification failed: received ${count:-0} 'A' bytes, need $SERIAL_MIN"
 fi
 
-echo "[6/6] Success: transpiled Java serial program transmits over USART on virtualavr."
+st_step "Success: transpiled Java serial program transmits over USART on virtualavr."

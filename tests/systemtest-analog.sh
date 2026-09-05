@@ -21,93 +21,39 @@
 #
 # Exit 0 on success, non-zero on any failure.
 
+# shellcheck disable=SC2034,SC1091  # config consumed by tests/lib/systemtest-lib.sh, dynamic source path
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROG_NAME="AnalogBlink"
+ENTRY_CLASS="AnalogBlink"
+EXAMPLE_DIR="analog-blink"
+APPROVED_HEX="analog-blink.hex"
+CONTAINER_TAG="analog"
+STEPS=5
 
-IMAGE="${VIRTUALAVR_IMAGE:-pfichtner/virtualavr:latest}"
 PIN="${BLINK_PIN:-13}"
 ADC_PIN="${ADC_PIN:-A0}"
 ADC_VALUE="${ADC_VALUE:-800}"          # > 512 → fast-blink path (100 ms half-period)
 WAIT_TIMEOUT="${BLINK_TIMEOUT:-5}"     # seconds to observe blinking
 TOGGLE_MIN="${BLINK_TOGGLES:-6}"       # 6 toggles in 5 s requires ≤ 833 ms period; fast=200 ms ✓, slow=1000 ms ✗
-BUILD_TIMEOUT="${BUILD_TIMEOUT:-180}"
 
-WS_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
-WS_URL="ws://localhost:$WS_PORT"
-CONTAINER="espressomachine-analog-$$"
-
-# ---------------------------------------------------------------------------
-# Cleanup on exit
-# ---------------------------------------------------------------------------
-cleanup() {
-    if [[ -n "${CONTAINER:-}" ]]; then
-        docker rm -f "$CONTAINER" > /dev/null 2>&1 || true
-    fi
-    if [[ -n "${WORK_DIR:-}" && -d "$WORK_DIR" ]]; then
-        rm -rf "$WORK_DIR"
-    fi
-}
-trap cleanup EXIT INT TERM
-
-die() { echo "ERROR: $*" >&2; exit 1; }
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/systemtest-lib.sh"
+st_init
 
 # ---------------------------------------------------------------------------
 # Locate / build the AnalogBlink.hex
 # ---------------------------------------------------------------------------
-HEX_FILE="${1:-}"
-WORK_DIR=$(mktemp -d)
-
-if [[ -z "$HEX_FILE" ]]; then
-    HEX_FILE="$WORK_DIR/AnalogBlink.hex"
-    echo "[1/5] Building AnalogBlink.hex via EspressoMachine..."
-    if ! command -v javac > /dev/null 2>&1 || ! command -v avr-ld > /dev/null 2>&1; then
-        echo "    (AVR toolchain not installed; using approved hex tests/approved/analog-blink.hex)"
-        cp "$REPO_ROOT/tests/approved/analog-blink.hex" "$HEX_FILE"
-    else
-        mvn compile -q -f "$REPO_ROOT/examples/pom.xml"
-        if (cd "$REPO_ROOT" && ./bin/espressomachine build \
-            --cp "examples/analog-blink/target/classes:runtime/api/target/classes" \
-            AnalogBlink \
-            --target atmega328p \
-            --output "$WORK_DIR/build" > /dev/null 2>&1) && [[ -f "$WORK_DIR/build/AnalogBlink.hex" ]]; then
-            cp "$WORK_DIR/build/AnalogBlink.hex" "$HEX_FILE"
-        else
-            echo "    (CLI build failed; using approved hex tests/approved/analog-blink.hex)"
-            cp "$REPO_ROOT/tests/approved/analog-blink.hex" "$HEX_FILE"
-        fi
-    fi
-fi
-
-[[ -f "$HEX_FILE" ]] || die "HEX file not found: $HEX_FILE"
-echo "[1/5] Using HEX: $HEX_FILE"
+st_find_hex "${1:-}"
 
 # ---------------------------------------------------------------------------
 # Start virtualavr container
 # ---------------------------------------------------------------------------
-echo "[2/5] Starting virtualavr container ($IMAGE)..."
-docker create --name "$CONTAINER" \
-    -p "$WS_PORT:8080" \
-    -e FILENAME=/AnalogBlink.hex \
-    "$IMAGE" > /dev/null 2>&1 || die "failed to create virtualavr container"
-docker cp "$HEX_FILE" "$CONTAINER:/AnalogBlink.hex" > /dev/null || die "failed to copy HEX into container"
-docker start "$CONTAINER" > /dev/null 2>&1 || die "failed to start virtualavr container"
+st_start_container
 
 # ---------------------------------------------------------------------------
 # Wait for the WebSocket endpoint to become reachable
 # ---------------------------------------------------------------------------
-echo "[3/5] Waiting for WebSocket endpoint at $WS_URL ..."
-DEADLINE=$(( $(date +%s) + BUILD_TIMEOUT ))
-until timeout 2 websocat "$WS_URL" < /dev/null > /dev/null 2>&1; do
-    if [[ $(date +%s) -gt $DEADLINE ]]; then
-        echo "Container logs:" >&2
-        docker logs "$CONTAINER" >&2 2>&1 || true
-        die "Timed out waiting for WebSocket endpoint to become ready"
-    fi
-    sleep 1
-done
-echo "    WebSocket endpoint is ready."
+st_wait_ws
 
 # ---------------------------------------------------------------------------
 # Inject ADC value and watch pin $PIN for toggles.
@@ -118,7 +64,7 @@ echo "    WebSocket endpoint is ready."
 # full period).  6 toggles in 5 s requires ≤ 833 ms/toggle — easily met by the
 # fast path but impossible for the slow path (1000 ms/toggle).
 # ---------------------------------------------------------------------------
-echo "[4/5] Injecting ADC $ADC_PIN=$ADC_VALUE, watching pin $PIN for ≥$TOGGLE_MIN toggles (${WAIT_TIMEOUT}s)..."
+st_step "Injecting ADC $ADC_PIN=$ADC_VALUE, watching pin $PIN for ≥$TOGGLE_MIN toggles (${WAIT_TIMEOUT}s)..."
 toggles=$(
     {
         printf '{"type":"pinState","pin":"%s","state":%s}\n' "$ADC_PIN" "$ADC_VALUE"
@@ -131,9 +77,7 @@ toggles=$(
 ) || true
 
 if [[ "${toggles:-0}" -lt "$TOGGLE_MIN" ]]; then
-    echo "Container logs:" >&2
-    docker logs "$CONTAINER" >&2 2>&1 || true
-    die "Analog blink verification failed: pin $PIN toggled ${toggles:-0} times (need $TOGGLE_MIN). ADC value $ADC_VALUE may not have been applied or the fast-blink path was not taken."
+    st_logs_and_die "Analog blink verification failed: pin $PIN toggled ${toggles:-0} times (need $TOGGLE_MIN). ADC value $ADC_VALUE may not have been applied or the fast-blink path was not taken."
 fi
 
-echo "[5/5] Success: transpiled Java AnalogBlink program blinks at expected rate on virtualavr (${toggles} toggles in ${WAIT_TIMEOUT}s with ADC $ADC_PIN=$ADC_VALUE)."
+st_step "Success: transpiled Java AnalogBlink program blinks at expected rate on virtualavr (${toggles} toggles in ${WAIT_TIMEOUT}s with ADC $ADC_PIN=$ADC_VALUE)."
