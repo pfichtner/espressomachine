@@ -133,19 +133,19 @@ public class SerialEmitter implements IntrinsicEmitter {
 
         // Distinguish by the declared parameter type: String (object) vs char/int.
         ValueType ptype = insn.getMethod().getDescriptor().parameterType(0);
-        boolean isString = (ptype instanceof ValueType.Object)
-                && "java.lang.String".equals(((ValueType.Object) ptype).getClassName());
+        boolean isString = (ptype instanceof ValueType.Object o)
+                && "java.lang.String".equals(o.getClassName());
 
         if (isString) {
             // String: prefer a string-literal global, else the raw ptr.
             String global = objectRefs.get(arg.getIndex());
             String target = (global != null) ? global : resolveVar.apply(arg);
             writer.callVoidPtr("__espressomachine_serial_print_str", target);
-            return;
-        }
+        } else {
+        	// Numeric (int or char) — transmit the decimal representation.
+        	writer.callVoid("__espressomachine_serial_print_int", resolveVar.apply(arg));
+		}
 
-        // Numeric (int or char) — transmit the decimal representation.
-        writer.callVoid("__espressomachine_serial_print_int", resolveVar.apply(arg));
     }
 
 }
