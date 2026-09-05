@@ -19,18 +19,22 @@ BB0:
   br label %BB1
 BB1:
   %v1 = add i32 0, 13
+  %v6 = add i32 0, 1
+  %_t0 = load volatile i8, ptr inttoptr (i16 36 to ptr)
+  %_t1 = or i8 %_t0, 32
+  store volatile i8 %_t1, ptr inttoptr (i16 36 to ptr)
   br label %BB2
 BB2:
   %v5 = add i32 0, 1
-  %_t0 = load volatile i8, ptr inttoptr (i16 37 to ptr)
-  %_t1 = or i8 %_t0, 32
-  store volatile i8 %_t1, ptr inttoptr (i16 37 to ptr)
+  %_t2 = load volatile i8, ptr inttoptr (i16 37 to ptr)
+  %_t3 = or i8 %_t2, 32
+  store volatile i8 %_t3, ptr inttoptr (i16 37 to ptr)
   %v2 = add i32 0, 500
   call void @__espressomachine_delay_ms(i32 500)
   %v4 = add i32 0, 0
-  %_t2 = load volatile i8, ptr inttoptr (i16 37 to ptr)
-  %_t3 = and i8 %_t2, 223
-  store volatile i8 %_t3, ptr inttoptr (i16 37 to ptr)
+  %_t4 = load volatile i8, ptr inttoptr (i16 37 to ptr)
+  %_t5 = and i8 %_t4, 223
+  store volatile i8 %_t5, ptr inttoptr (i16 37 to ptr)
   %v3 = add i32 0, 500
   call void @__espressomachine_delay_ms(i32 500)
   br label %BB2
