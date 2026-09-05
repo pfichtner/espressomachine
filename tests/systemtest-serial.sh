@@ -77,8 +77,7 @@ st_wait_serial_device
 # ---------------------------------------------------------------------------
 # Unpause the simulation now that the serial port is configured
 # ---------------------------------------------------------------------------
-printf '{"type":"control","action":"unpause"}\n' \
-    | timeout 5 websocat "$WS_URL" > /dev/null 2>&1 || true
+st_ws_unpause
 
 # ---------------------------------------------------------------------------
 # Read WAIT_TIMEOUT seconds of serial output and count 'A' (0x41) bytes

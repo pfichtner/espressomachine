@@ -77,8 +77,7 @@ timeout 10 cat "$SERIAL_DEVICE" > "$ECHO_OUT" 2>/dev/null &
 CAT_PID=$!
 
 # Unpause the simulation now that the serial port is configured.
-printf '{"type":"control","action":"unpause"}\n' \
-    | timeout 5 websocat "$WS_URL" > /dev/null 2>&1 || true
+st_ws_unpause
 
 st_step "Sending test bytes and waiting for echo..."
 # Allow the AVR to reach its read loop, then send five 'A' bytes.

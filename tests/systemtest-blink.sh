@@ -69,12 +69,10 @@ st_wait_ws
 st_step "Watching pin $PIN for at least $TOGGLE_MIN toggles (${WAIT_TIMEOUT}s)..."
 toggles=$(
     {
-        printf '{"type":"pinMode","pin":"%s","mode":"digital"}\n' "$PIN"
+        ws_pin_subscribe "$PIN"
         sleep "$WAIT_TIMEOUT"
     } | websocat "$WS_URL" 2>/dev/null \
-      | jq -rc --arg p "$PIN" \
-            'try (select(.type=="pinState" and .pin==$p) | .state)' 2>/dev/null \
-      | awk 'NR>1 && $0!=prev{c++} {prev=$0} END{print c+0}'
+      | st_count_pin_toggles "$PIN"
 ) || true
 
 if [[ "${toggles:-0}" -lt "$TOGGLE_MIN" ]]; then

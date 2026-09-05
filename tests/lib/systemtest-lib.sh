@@ -23,6 +23,13 @@
 #   st_wait_serial_device - poll until the PTY appears, then configure stty
 #   st_step <label>       - print "[n/N] label" (auto-numbered)
 #   st_logs_and_die <msg> - dump container logs to stderr, then die
+#
+# WebSocket helpers:
+#   ws_pin_subscribe <pin> [replyId]   - print pinMode subscribe JSON line
+#   ws_pin_inject <pin> <val> [replyId]- print pinState inject JSON line
+#   ws_unpause_msg                     - print control/unpause JSON line
+#   st_ws_unpause                      - send unpause and discard reply
+#   st_count_pin_toggles <pin>         - stdin filter: count HIGH<->LOW transitions
 
 set -euo pipefail
 
@@ -160,4 +167,37 @@ st_wait_serial_device() {
 
     # Configure the PTY: raw mode, no echo, 8N1.
     stty -F "$SERIAL_DEVICE" "$BAUD" raw -echo cs8 -parenb -cstopb clocal
+}
+
+# ---------------------------------------------------------------------------
+# WebSocket message builders — print one JSON line to stdout.
+# An optional replyId argument appends a "replyId" field; callers that need
+# ack-sequencing should pass $(uuidgen) so IDs are unique and collision-free.
+# ---------------------------------------------------------------------------
+
+ws_pin_subscribe() {    # ws_pin_subscribe <pin> [replyId]
+    local pin=$1 extra=""
+    [[ -n "${2:-}" ]] && extra=',"replyId":"'"$2"'"'
+    printf '{"type":"pinMode","pin":"%s","mode":"digital"%s}\n' "$pin" "$extra"
+}
+
+ws_pin_inject() {       # ws_pin_inject <pin> <value> [replyId]
+    local pin=$1 val=$2 extra=""
+    [[ -n "${3:-}" ]] && extra=',"replyId":"'"$3"'"'
+    printf '{"type":"pinState","pin":"%s","state":%s%s}\n' "$pin" "$val" "$extra"
+}
+
+ws_unpause_msg() {
+    printf '{"type":"control","action":"unpause"}\n'
+}
+
+st_ws_unpause() {
+    ws_unpause_msg | timeout 5 websocat "$WS_URL" > /dev/null 2>&1 || true
+}
+
+# Reads websocat output from stdin; prints count of HIGH<->LOW transitions for <pin>.
+st_count_pin_toggles() {   # st_count_pin_toggles <pin>
+    jq -rc --arg p "$1" \
+        'try (select(.type=="pinState" and .pin==$p) | .state)' 2>/dev/null \
+    | awk 'NR>1 && $0!=prev{c++} {prev=$0} END{print c+0}'
 }
