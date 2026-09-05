@@ -82,16 +82,17 @@ st_wait_ws
 # ---------------------------------------------------------------------------
 st_step "Subscribing to pin $LED_PIN, injecting pin $BTN_PIN HIGH → expecting ≥${TOGGLE_MIN} blink edges in ${WAIT_TIMEOUT}s..."
 
+sub_id=$(uuidgen); low_id=$(uuidgen); high_id=$(uuidgen)
 toggles=$(
     (
-        printf '{"type":"pinMode","pin":"%s","mode":"digital","replyId":"sub"}\n' "$LED_PIN"
-        until grep -q 'sub' "$ACK_FILE" 2>/dev/null; do sleep 0.05; done
+        ws_pin_subscribe "$LED_PIN" "$sub_id"
+        until grep -q "$sub_id" "$ACK_FILE" 2>/dev/null; do sleep 0.05; done
 
-        printf '{"type":"pinState","pin":"%s","state":false,"replyId":"low"}\n' "$BTN_PIN"
-        until grep -q 'low' "$ACK_FILE" 2>/dev/null; do sleep 0.05; done
+        ws_pin_inject "$BTN_PIN" false "$low_id"
+        until grep -q "$low_id" "$ACK_FILE" 2>/dev/null; do sleep 0.05; done
 
-        printf '{"type":"pinState","pin":"%s","state":true,"replyId":"high"}\n' "$BTN_PIN"
-        until grep -q 'high' "$ACK_FILE" 2>/dev/null; do sleep 0.05; done
+        ws_pin_inject "$BTN_PIN" true "$high_id"
+        until grep -q "$high_id" "$ACK_FILE" 2>/dev/null; do sleep 0.05; done
 
         sleep "$WAIT_TIMEOUT"
     ) | websocat "$WS_URL" 2>/dev/null \
@@ -100,9 +101,7 @@ toggles=$(
             rid=$(printf '%s' "$line" | jq -r '.replyId // empty' 2>/dev/null)
             [[ -n "$rid" ]] && printf '%s\n' "$rid" >> "$ACK_FILE"
         done \
-      | jq -rc --arg p "$LED_PIN" \
-            'try (select(.type=="pinState" and .pin==$p) | .state)' 2>/dev/null \
-      | awk 'NR>1 && $0!=prev{c++} {prev=$0} END{print c+0}'
+      | st_count_pin_toggles "$LED_PIN"
 ) || true
 
 if [[ "${toggles:-0}" -lt "$TOGGLE_MIN" ]]; then

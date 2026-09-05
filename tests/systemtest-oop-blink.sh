@@ -63,8 +63,8 @@ st_wait_ws
 st_step "Watching pins $PIN1 and $PIN2 for at least $TOGGLE_MIN toggles each (${WAIT_TIMEOUT}s)..."
 result=$(
     {
-        printf '{"type":"pinMode","pin":"%s","mode":"digital"}\n' "$PIN1"
-        printf '{"type":"pinMode","pin":"%s","mode":"digital"}\n' "$PIN2"
+        ws_pin_subscribe "$PIN1"
+        ws_pin_subscribe "$PIN2"
         sleep "$WAIT_TIMEOUT"
     } | websocat "$WS_URL" 2>/dev/null \
       | jq -rc --arg p1 "$PIN1" --arg p2 "$PIN2" \
