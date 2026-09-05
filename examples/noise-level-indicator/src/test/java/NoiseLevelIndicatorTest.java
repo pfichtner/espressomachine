@@ -12,24 +12,21 @@ import com.github.pfichtner.espressomachine.api.Gpio;
 class NoiseLevelIndicatorTest {
 
     @Test
-    void alternatelyHighAndLowOnInternalLed() {
+    void alternatelyHighAndLowOnInternalLed() throws Exception {
         NoiseLevelIndicator sut = new NoiseLevelIndicator();
         sut.gpio = mock(Gpio.class);
 
         var executor = newSingleThreadExecutor();
-        executor.execute(() -> {
-            try { sut.main(); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        });
-
-        try {
+        try (var ignored = (AutoCloseable) () -> executor.shutdownNow()) {
+            executor.execute(() -> {
+                try { sut.main(); }
+                catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            });
             await().atMost(3, SECONDS).untilAsserted(() -> {
                 InOrder order = inOrder(sut.gpio);
                 order.verify(sut.gpio).digitalWrite(13, 1);
                 order.verify(sut.gpio).digitalWrite(13, 0);
             });
-        } finally {
-            executor.shutdownNow();
         }
     }
 }
