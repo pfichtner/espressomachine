@@ -3,7 +3,7 @@ import com.github.pfichtner.espressomachine.api.*;
 // Blinks LED on pin 13 at a rate determined by the analog value on A0.
 // A0 > 512 → 100 ms half-period (fast).  A0 ≤ 512 → 500 ms half-period (slow).
 class AnalogBlink {
-    static void main() {
+    public static void main(String[] args) {
         GPIO.pinMode(13, GPIO.OUTPUT);
         while (true) {
             int ms = GPIO.analogRead(GPIO.A0) > 512 ? 100 : 500;

@@ -1,7 +1,7 @@
 import com.github.pfichtner.espressomachine.api.*;
 
 class FunctionsExample {
-    static void main() {
+    public static void main(String[] args) {
         // map: ADC range 0-1023 → PWM range 0-255
         int adcValue = 512;
         int pwm = Functions.map(adcValue, 0, 1023, 0, 255);

@@ -3,7 +3,7 @@ class Percent {
         return value * 9 / 10;
     }
 
-    static void main() {
+    public static void main(String[] args) {
         ninetyPercent(1023);
     }
 }

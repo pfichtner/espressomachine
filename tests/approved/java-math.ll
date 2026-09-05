@@ -16,51 +16,51 @@ BB1:
   ret void
 }
 
-define void @JavaMath_main(ptr %v1) {
+define void @JavaMath_main() {
 BB0:
   br label %BB1
 BB1:
-  %v8 = add i32 0, 9600
+  %v7 = add i32 0, 9600
   store volatile i8 0, ptr inttoptr (i16 197 to ptr)
   store volatile i8 103, ptr inttoptr (i16 196 to ptr)
   store volatile i8 24, ptr inttoptr (i16 193 to ptr)
   store volatile i8 6, ptr inttoptr (i16 194 to ptr)
-  %v11 = add i32 0, 5
-  %v2 = add i32 0, 5
-  %v12 = add i32 0, 3
-  %v3 = add i32 0, 3
-  %v13 = add i32 0, 5
-  %v9 = add i32 0, 3
-  %v14 = call i32 @llvm.smin.i32(i32 5, i32 3)
-  call void @__espressomachine_serial_print_int(i32 %v14)
+  %v10 = add i32 0, 5
+  %v1 = add i32 0, 5
+  %v11 = add i32 0, 3
+  %v2 = add i32 0, 3
+  %v12 = add i32 0, 5
+  %v8 = add i32 0, 3
+  %v13 = call i32 @llvm.smin.i32(i32 5, i32 3)
+  call void @__espressomachine_serial_print_int(i32 %v13)
   call void @__espressomachine_serial_write(i32 13)
   call void @__espressomachine_serial_write(i32 10)
-  %v15 = add i32 0, 5
-  %v16 = add i32 0, 3
-  %v17 = call i32 @llvm.smax.i32(i32 5, i32 3)
-  call void @__espressomachine_serial_print_int(i32 %v17)
+  %v14 = add i32 0, 5
+  %v15 = add i32 0, 3
+  %v16 = call i32 @llvm.smax.i32(i32 5, i32 3)
+  call void @__espressomachine_serial_print_int(i32 %v16)
   call void @__espressomachine_serial_write(i32 13)
   call void @__espressomachine_serial_write(i32 10)
-  %v18 = add i32 0, -7
-  %v19 = call i32 @llvm.abs.i32(i32 -7, i1 false)
-  call void @__espressomachine_serial_print_int(i32 %v19)
+  %v17 = add i32 0, -7
+  %v18 = call i32 @llvm.abs.i32(i32 -7, i1 false)
+  call void @__espressomachine_serial_print_int(i32 %v18)
   call void @__espressomachine_serial_write(i32 13)
   call void @__espressomachine_serial_write(i32 10)
-  %v20 = fadd double 0.0, 0x4000000000000000
-  %v10 = fadd double 0.0, 0x4024000000000000
-  %v21 = call double @pow(double %v20, double %v10)
-  %v4 = add i32 0, %v21
-  %v22 = fadd double 0.0, 0x4022000000000000
-  %v23 = call double @sqrt(double %v22)
-  %v6 = add i32 0, %v23
-  %v24 = add i32 0, %v4
-  %v25 = fptosi double %v24 to i32
-  call void @__espressomachine_serial_print_int(i32 %v25)
+  %v19 = fadd double 0.0, 0x4000000000000000
+  %v9 = fadd double 0.0, 0x4024000000000000
+  %v20 = call double @pow(double %v19, double %v9)
+  %v3 = add i32 0, %v20
+  %v21 = fadd double 0.0, 0x4022000000000000
+  %v22 = call double @sqrt(double %v21)
+  %v5 = add i32 0, %v22
+  %v23 = add i32 0, %v3
+  %v24 = fptosi double %v23 to i32
+  call void @__espressomachine_serial_print_int(i32 %v24)
   call void @__espressomachine_serial_write(i32 13)
   call void @__espressomachine_serial_write(i32 10)
-  %v26 = add i32 0, %v6
-  %v27 = fptosi double %v26 to i32
-  call void @__espressomachine_serial_print_int(i32 %v27)
+  %v25 = add i32 0, %v5
+  %v26 = fptosi double %v25 to i32
+  call void @__espressomachine_serial_print_int(i32 %v26)
   call void @__espressomachine_serial_write(i32 13)
   call void @__espressomachine_serial_write(i32 10)
   ret void

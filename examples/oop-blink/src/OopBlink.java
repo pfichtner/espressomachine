@@ -1,7 +1,7 @@
 import com.github.pfichtner.espressomachine.api.*;
 
 class OopBlink {
-    static void main() {
+    public static void main(String[] args) {
         Led led1 = new Led(13);
         Led led2 = new Led(12);
 

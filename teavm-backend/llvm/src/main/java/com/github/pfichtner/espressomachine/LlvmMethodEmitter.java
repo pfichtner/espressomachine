@@ -94,6 +94,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     private final boolean inEnumClinit;
     // The enum class name, when inEnumClinit is true.
     private final String enumClassName;
+    // When main(String[] args) is the entry point, the args slot (v1) is suppressed
+    // from the LLVM signature; shift subsequent variable indices down so the emitted
+    // IR is identical to that of a plain main() declaration.
+    private final int varIndexShift;
 
     LlvmMethodEmitter(StringBuilder out, Program program, MethodReader method,
                       LlvmModuleEmitter module) {
@@ -105,6 +109,16 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         boolean isEnumClass = module != null && module.enumClasses.contains(cls);
         this.inEnumClinit = isEnumClass && "<clinit>".equals(method.getName());
         this.enumClassName = isEnumClass ? cls : null;
+        this.varIndexShift = isEntryMainWithStringArgs() ? 1 : 0;
+    }
+
+    private boolean isEntryMainWithStringArgs() {
+        if (!method.hasModifier(org.teavm.model.ElementModifier.STATIC)) return false;
+        if (!"main".equals(method.getName())) return false;
+        if (method.parameterCount() != 1) return false;
+        ValueType p = method.getParameterTypes()[0];
+        return p instanceof ValueType.Array a
+            && a.getItemType().equals(ValueType.object("java.lang.String"));
     }
 
     // ------------------------------------------------------------------
@@ -143,6 +157,9 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
             params.add("ptr " + v(varIndex++));
         }
         for (ValueType paramType : method.getParameterTypes()) {
+            // On embedded targets the String[] args parameter of main() is never passed;
+            // suppress it from the LLVM signature so the entry symbol stays arg-free.
+            if (varIndexShift > 0) { varIndex++; continue; }
             params.add(llvmType(paramType) + " " + v(varIndex++));
         }
         return params;
@@ -717,12 +734,12 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         return lit != null ? lit : v(v);
     }
 
-    private static String v(Variable v) {
-        return "%v" + v.getIndex();
+    private String v(Variable v) {
+        return v(v.getIndex());
     }
 
-    private static String v(int index) {
-        return "%v" + index;
+    private String v(int index) {
+        return "%v" + (index >= 2 ? index - varIndexShift : index);
     }
 
     private static String bbLabel(int index) {

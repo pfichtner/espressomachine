@@ -9,7 +9,7 @@ class Counter {
         return value;
     }
 
-    static void main() {
+    public static void main(String[] args) {
         Counter c = new Counter();
         c.increment();
         c.increment();

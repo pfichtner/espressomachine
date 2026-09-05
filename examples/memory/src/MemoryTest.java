@@ -13,7 +13,7 @@ class MemoryTest {
         return new Counter();
     }
 
-    static void main() {
+    public static void main(String[] args) {
         counter.increment();
         localUse();
     }

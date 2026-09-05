@@ -24,13 +24,13 @@ BB1:
   ret void
 }
 
-define void @NoiseLevelIndicator_main(ptr %v1) {
+define void @NoiseLevelIndicator_main() {
 BB0:
   br label %BB1
 BB1:
-  %v2 = alloca %NoiseLevelIndicator_t
-  call void @NoiseLevelIndicator__init_(ptr %v2)
-  call void @NoiseLevelIndicator_main(ptr %v2)
+  %v1 = alloca %NoiseLevelIndicator_t
+  call void @NoiseLevelIndicator__init_(ptr %v1)
+  call void @NoiseLevelIndicator_main(ptr %v1)
   ret void
 }
 

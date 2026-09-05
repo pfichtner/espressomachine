@@ -4,7 +4,7 @@ import com.github.pfichtner.espressomachine.api.Delay;
 import com.github.pfichtner.espressomachine.api.GPIO;
 
 class DelayTime {
-    static void main() {
+    public static void main(String[] args) {
         GPIO.pinMode(13, GPIO.OUTPUT);
 
         while (true) {

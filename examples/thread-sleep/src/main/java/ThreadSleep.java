@@ -3,7 +3,7 @@ import java.util.concurrent.TimeUnit;
 import com.github.pfichtner.espressomachine.api.GPIO;
 
 class ThreadSleep {
-    static void main() throws InterruptedException {
+    public static void main(String[] args) throws InterruptedException {
         GPIO.pinMode(13, GPIO.OUTPUT);
 
         while (true) {

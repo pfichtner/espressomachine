@@ -10,7 +10,7 @@ class ControlFlow {
         return x;
     }
 
-    static void main() {
+    public static void main(String[] args) {
         test(5);
         count();
     }

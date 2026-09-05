@@ -3,7 +3,7 @@ class Add {
         return a + b;
     }
 
-    static void main() {
+    public static void main(String[] args) {
         add(1, 2);
     }
 }
