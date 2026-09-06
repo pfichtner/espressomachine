@@ -15,15 +15,15 @@ Compiles JVM bytecode (`.class` / `.jar`) into native code for microcontrollers 
 
 Initial target: **ATmega328P** (Arduino Uno, 16 MHz, 32 KB flash).
 
-```
+```java
 class Blink {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         GPIO.pinMode(13, GPIO.OUTPUT);
         while (true) {
             GPIO.digitalWrite(13, GPIO.HIGH);
-            Delay.ms(500);
+            Thread.sleep(500);
             GPIO.digitalWrite(13, GPIO.LOW);
-            Delay.ms(500);
+            Thread.sleep(500);
         }
     }
 }
@@ -47,11 +47,11 @@ class Blink {
     static void setup() {
         GPIO.pinMode(13, GPIO.OUTPUT);
     }
-    static void loop() {
+    static void loop() throws InterruptedException {
         GPIO.digitalWrite(13, GPIO.HIGH);
-        Delay.ms(500);
+        TimeUnit.MILLISECONDS.sleep(500);
         GPIO.digitalWrite(13, GPIO.LOW);
-        Delay.ms(500);
+        TimeUnit.MILLISECONDS.sleep(500);
     }
 }
 ```
