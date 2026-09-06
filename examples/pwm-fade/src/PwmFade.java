@@ -1,7 +1,7 @@
 import com.github.pfichtner.espressomachine.api.*;
 
 class PwmFade {
-    static void main() {
+    public static void main(String[] args) {
         int duty = 0;
         int step = 1;
 

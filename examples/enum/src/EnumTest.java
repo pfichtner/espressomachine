@@ -46,7 +46,7 @@ class EnumTest {
         return p.number;
     }
 
-    static void main() {
+    public static void main(String[] args) {
         ordinalOf(Direction.EAST);
         isNorth(Direction.NORTH);
         encode(Direction.WEST);

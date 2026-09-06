@@ -1,7 +1,7 @@
 import com.github.pfichtner.espressomachine.api.*;
 
 class HelloSerial {
-    static void main() {
+    public static void main(String[] args) {
         Serial.begin(9600);
         while (true) {
             Serial.println('A');

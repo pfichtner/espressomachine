@@ -18,24 +18,24 @@ BB1:
   ret void
 }
 
-define void @RandomExample_main(ptr %v1) {
+define void @RandomExample_main() {
 BB0:
   br label %BB1
 BB1:
-  %v2 = add i32 0, 9600
+  %v1 = add i32 0, 9600
   store volatile i8 0, ptr inttoptr (i16 197 to ptr)
   store volatile i8 103, ptr inttoptr (i16 196 to ptr)
   store volatile i8 24, ptr inttoptr (i16 193 to ptr)
   store volatile i8 6, ptr inttoptr (i16 194 to ptr)
-  %v4 = add i32 0, 100
-  %v5 = call i32 @__espressomachine_random_long(i32 100)
-  %v6 = add i32 0, 1
-  %v3 = add i32 0, 10
-  %v7 = call i32 @__espressomachine_random_range(i32 1, i32 10)
-  call void @__espressomachine_serial_print_int(i32 %v5)
+  %v3 = add i32 0, 100
+  %v4 = call i32 @__espressomachine_random_long(i32 100)
+  %v5 = add i32 0, 1
+  %v2 = add i32 0, 10
+  %v6 = call i32 @__espressomachine_random_range(i32 1, i32 10)
+  call void @__espressomachine_serial_print_int(i32 %v4)
   call void @__espressomachine_serial_write(i32 13)
   call void @__espressomachine_serial_write(i32 10)
-  call void @__espressomachine_serial_print_int(i32 %v7)
+  call void @__espressomachine_serial_print_int(i32 %v6)
   call void @__espressomachine_serial_write(i32 13)
   call void @__espressomachine_serial_write(i32 10)
   ret void

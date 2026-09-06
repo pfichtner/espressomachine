@@ -460,13 +460,20 @@ class LlvmModuleEmitter {
         out.append("}\n\n");
     }
 
-    /** Returns true if {@code cls} declares a static method with the given name and no-arg void signature. */
+    /** Returns true if {@code cls} declares a static method with the given name and no-arg void signature.
+     *  For "main" specifically, also accepts the standard {@code main(String[] args)} signature. */
     private static boolean hasStaticVoidMethod(ClassHolder cls, String name) {
         if (cls == null) return false;
         return cls.getMethods().stream().anyMatch(m ->
             name.equals(m.getName()) &&
             m.hasModifier(org.teavm.model.ElementModifier.STATIC) &&
-            m.parameterCount() == 0 &&
-            ValueType.VOID.equals(m.getResultType()));
+            ValueType.VOID.equals(m.getResultType()) &&
+            (m.parameterCount() == 0 || ("main".equals(name) && isStringArrayParam(m))));
+    }
+
+    private static boolean isStringArrayParam(MethodReader m) {
+        if (m.parameterCount() != 1) return false;
+        ValueType p = m.getParameterTypes()[0];
+        return p instanceof ValueType.Array a && a.getItemType().equals(ValueType.object("java.lang.String"));
     }
 }

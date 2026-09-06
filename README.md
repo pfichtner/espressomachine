@@ -17,7 +17,7 @@ Initial target: **ATmega328P** (Arduino Uno, 16 MHz, 32 KB flash).
 
 ```
 class Blink {
-    static void main() {
+    public static void main(String[] args) {
         GPIO.pinMode(13, GPIO.OUTPUT);
         while (true) {
             GPIO.digitalWrite(13, GPIO.HIGH);
@@ -39,7 +39,7 @@ espressomachine build Blink.class --target atmega328p
 
 Two styles of entry are supported:
 
-- **`static void main()`** — the default. Called once from the reset vector, so it is expected to drive any repeated work itself (e.g. the `while (true)` loop above).
+- **`public static void main(String[] args)`** — the default. Called once from the reset vector, so it is expected to drive any repeated work itself (e.g. the `while (true)` loop above).
 - **`static void setup()` / `static void loop()`** — the Arduino style. If the entry class has no `main()`, EspressoMachine synthesizes a `ClassName_main` wrapper that calls `setup()` once and then calls `loop()` in an endless loop. A real `main()` always wins over `setup()`/`loop()`.
 
 ```java
