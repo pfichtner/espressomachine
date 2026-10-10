@@ -243,6 +243,16 @@ run_ll_test "analog-blink" \
     "examples/analog-blink/target/classes:$API_CLASSES" \
     "AnalogBlink"
 
+# Sensor Monitor: analogRead + PWM + Serial + Delay combined
+run_ll_test "sensor-monitor" \
+    "examples/sensor-monitor/target/classes:$API_CLASSES" \
+    "SensorMonitor"
+
+run_hex_test "sensor-monitor-hex" \
+    "examples/sensor-monitor/target/classes:$API_CLASSES" \
+    "SensorMonitor" \
+    "$APPROVED_DIR/sensor-monitor.hex"
+
 run_ll_test "pwm-fade" \
     "examples/pwm-fade/target/classes:$API_CLASSES" \
     "PwmFade"

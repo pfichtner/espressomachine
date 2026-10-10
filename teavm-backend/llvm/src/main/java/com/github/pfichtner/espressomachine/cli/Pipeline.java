@@ -67,6 +67,12 @@ class Pipeline {
                 "-o", outputDir.resolve("intdiv.o").toString(),
                 targetDir.resolve("intdiv.ll").toString());
 
+        System.out.println("[4c/6] Compiling softfloat.ll → softfloat.o ...");
+        run("llc-18", "-march=avr", "-mcpu=" + mcu, "-filetype=obj",
+                "-function-sections", "-data-sections",
+                "-o", outputDir.resolve("softfloat.o").toString(),
+                targetDir.resolve("softfloat.ll").toString());
+
         System.out.println("[5/6] Generating delay.ll (DELAY_ITERS=" + delayIters + ") ...");
         Path calibratedDelay = substituteDelay(targetDir, delayIters);
         run("llc-18", "-march=avr", "-mcpu=" + mcu, "-filetype=obj",
@@ -99,6 +105,7 @@ class Pipeline {
                 outputDir.resolve(entryClass + ".o").toString(),
                 outputDir.resolve("gpio.o").toString(),
                 outputDir.resolve("intdiv.o").toString(),
+                outputDir.resolve("softfloat.o").toString(),
                 outputDir.resolve("delay.o").toString()));
         if (usesSerial) linkArgs.add(outputDir.resolve("serial.o").toString());
         if (usesMillis) linkArgs.add(outputDir.resolve("time.o").toString());

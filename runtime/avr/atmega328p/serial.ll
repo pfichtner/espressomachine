@@ -13,6 +13,9 @@
 ; 9600 baud at 16 MHz (UBRR = 103) so programs that call begin() with a
 ; non-constant argument still get a working serial port.
 
+declare i32 @__udivsi3(i32 %dividend, i32 %divisor)
+declare i32 @__umodsi3(i32 %dividend, i32 %divisor)
+
 define void @__espressomachine_serial_begin(i32 %baud) {
 entry:
   store volatile i8 0,   ptr inttoptr (i16 197 to ptr)  ; UBRR0H = 0
@@ -57,6 +60,37 @@ loop:
   %znext = icmp eq i8 %cnext, 0
   br i1 %znext, label %done, label %loop
 done:
+  ret void
+}
+
+; Transmit a signed 32-bit integer in decimal (most-significant digit first),
+; recursing on the (unsigned) quotient so digits are emitted in order.
+define void @__espressomachine_serial_print_int(i32 %n) {
+entry:
+  %neg = icmp slt i32 %n, 0
+  br i1 %neg, label %negblock, label %body
+
+negblock:
+  call void @__espressomachine_serial_write(i32 45)   ; '-'
+  %u = sub i32 0, %n
+  br label %body
+
+body:
+  %v = phi i32 [ %n, %entry ], [ %u, %negblock ]
+  %lt10 = icmp ult i32 %v, 10
+  br i1 %lt10, label %last, label %recurse
+
+recurse:
+  %q = call i32 @__udivsi3(i32 %v, i32 10)
+  call void @__espressomachine_serial_print_int(i32 %q)
+  %r = call i32 @__umodsi3(i32 %v, i32 10)
+  %dr = add i32 %r, 48
+  call void @__espressomachine_serial_write(i32 %dr)
+  ret void
+
+last:
+  %dl = add i32 %v, 48
+  call void @__espressomachine_serial_write(i32 %dl)
   ret void
 }
 
