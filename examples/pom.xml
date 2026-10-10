@@ -56,6 +56,7 @@
         <module>analog-read</module>
         <module>analog-blink</module>
         <module>pwm-fade</module>
+        <module>sensor-monitor</module>
         <module>random</module>
         <module>java-random</module>
         <module>java-math</module>
