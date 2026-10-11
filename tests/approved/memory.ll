@@ -10,15 +10,6 @@ declare void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value)
 declare void @__espressomachine_delay_ms(i32 %ms)
 
 
-define void @MemoryTest__clinit_() {
-BB0:
-  br label %BB1
-BB1:
-  %v1 = getelementptr %Counter_t, ptr @MemoryTest_counter, i32 0
-  ; static object already initialized as global: @MemoryTest_counter
-  ret void
-}
-
 define void @MemoryTest__init_(ptr %v0) {
 BB0:
   ; init_class MemoryTest
@@ -56,6 +47,15 @@ BB1:
   %v1 = getelementptr i8, ptr @MemoryTest_counter, i32 0
   call void @Counter_increment(ptr %v1)
   call void @MemoryTest_localUse()
+  ret void
+}
+
+define void @MemoryTest__clinit_() {
+BB0:
+  br label %BB1
+BB1:
+  %v1 = getelementptr %Counter_t, ptr @MemoryTest_counter, i32 0
+  ; static object already initialized as global: @MemoryTest_counter
   ret void
 }
 
