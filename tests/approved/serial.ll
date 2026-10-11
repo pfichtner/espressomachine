@@ -7,7 +7,7 @@ declare void @__espressomachine_delay_ms(i32 %ms)
 declare void @__espressomachine_serial_begin(i32 %baud)
 declare void @__espressomachine_serial_write(i32 %b)
 declare void @__espressomachine_serial_print_int(i32 %n)
-declare void @__espressomachine_serial_print_str(ptr %s)
+declare void @__espressomachine_serial_print_str(ptr addrspace(1) %s)
 
 define void @HelloSerial__init_(ptr %v0) {
 BB0:
@@ -33,8 +33,8 @@ BB2:
   call void @__espressomachine_serial_write(i32 13)
   %v6 = add i32 0, 10
   call void @__espressomachine_serial_write(i32 10)
-  %v3 = getelementptr i8, ptr @espressomachine_string_0, i32 0
-  call void @__espressomachine_serial_print_str(ptr @espressomachine_string_0)
+  %v3 = getelementptr i8, ptr addrspace(1) @espressomachine_string_0, i32 0
+  call void @__espressomachine_serial_print_str(ptr addrspace(1) @espressomachine_string_0)
   call void @__espressomachine_serial_write(i32 13)
   call void @__espressomachine_serial_write(i32 10)
   %v4 = add i32 0, 1000
@@ -42,5 +42,5 @@ BB2:
   br label %BB2
 }
 
-@espressomachine_string_0 = private unnamed_addr constant [24 x i8] c"Hello, EspressoMachine!\00"
+@espressomachine_string_0 = private unnamed_addr addrspace(1) constant [24 x i8] c"Hello, EspressoMachine!\00"
 

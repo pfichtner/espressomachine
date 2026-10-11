@@ -43,6 +43,16 @@ public class SerialEmitter implements IntrinsicEmitter {
                     Map<Integer, String> constVars,
                     Function<Variable, String> resolveVar,
                     Map<Integer, String> objectRefs) {
+        return emit(writer, insn, constVars, resolveVar, objectRefs, Map.of(), s -> s);
+    }
+
+    @Override
+    public int emit(LlvmWriter writer, InvokeInstruction insn,
+                    Map<Integer, String> constVars,
+                    Function<Variable, String> resolveVar,
+                    Map<Integer, String> objectRefs,
+                    Map<Integer, String> stringLiterals,
+                    Function<String, String> internString) {
         String method = insn.getMethod().getName();
         List<? extends Variable> args = insn.getArguments();
         switch (method) {
@@ -52,6 +62,8 @@ public class SerialEmitter implements IntrinsicEmitter {
             case "read"      -> emitRead(writer, insn, resolveVar);
             case "print"     -> emitPrint(writer, args, insn, objectRefs, resolveVar);
             case "println"   -> emitPrintln(writer, args, insn, objectRefs, resolveVar);
+            case "printf"    -> emitPrintf(writer, insn, objectRefs, stringLiterals,
+                                           internString, resolveVar);
             default          -> emitFallback(writer, insn, args, resolveVar);
         }
         return writer.tmpCounter();
@@ -59,12 +71,37 @@ public class SerialEmitter implements IntrinsicEmitter {
 
     public String declarations(Map<String, Program> programs) {
         if (!isUsedIn(programs, InvokeInstructions.isClassname(CLASS))) return "";
-        return """
+        StringBuilder out = new StringBuilder("""
                 declare void @__espressomachine_serial_begin(i32 %baud)
                 declare void @__espressomachine_serial_write(i32 %b)
                 declare void @__espressomachine_serial_print_int(i32 %n)
-                declare void @__espressomachine_serial_print_str(ptr %s)
-                """;
+                declare void @__espressomachine_serial_print_str(ptr addrspace(1) %s)
+                """);
+        if (isPrintfUsed(programs)) {
+            out.append("""
+                    declare void @__espressomachine_serial_print_uint(i32 %n)
+                    declare void @__espressomachine_serial_print_radix(i32 %n, i32 %radix, i32 %upper)
+                    """);
+        }
+        return out.toString();
+    }
+
+    private static boolean isPrintfUsed(Map<String, Program> programs) {
+        for (Program prog : programs.values()) {
+            if (prog == null) continue;
+            for (int bi = 0; bi < prog.basicBlockCount(); bi++) {
+                var bb = prog.basicBlockAt(bi);
+                if (bb == null) continue;
+                for (var insn : bb) {
+                    if (insn instanceof InvokeInstruction inv
+                            && CLASS.equals(inv.getMethod().getClassName())
+                            && "printf".equals(inv.getMethod().getName())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     // ---- Internal helpers ----
@@ -140,12 +177,151 @@ public class SerialEmitter implements IntrinsicEmitter {
             // String: prefer a string-literal global, else the raw ptr.
             String global = objectRefs.get(arg.getIndex());
             String target = (global != null) ? global : resolveVar.apply(arg);
-            writer.callVoidPtr("__espressomachine_serial_print_str", target);
+            writer.callVoidPtrAS1("__espressomachine_serial_print_str", target);
         } else {
         	// Numeric (int or char) — transmit the decimal representation.
         	writer.callVoid("__espressomachine_serial_print_int", resolveVar.apply(arg));
 		}
 
+    }
+
+    // ---- printf: compile-time format expansion ----
+
+    /**
+     * Lower a {@code Serial.printf} call by expanding its (string-literal) format
+     * into a flat sequence of print/write calls. No runtime formatter or String
+     * heap is involved; each specifier consumes the next argument, whose declared
+     * type is validated against the specifier.
+     */
+    private void emitPrintf(LlvmWriter writer, InvokeInstruction insn,
+                            Map<Integer, String> objectRefs,
+                            Map<Integer, String> stringLiterals,
+                            Function<String, String> internString,
+                            Function<Variable, String> resolveVar) {
+        List<? extends Variable> args = insn.getArguments();
+        if (args.isEmpty()) return;
+
+        String fmt = stringLiterals.get(args.get(0).getIndex());
+        if (fmt == null) {
+            writer.line("; ERROR: Serial.printf requires a compile-time string-literal format");
+            String target = objectRefs.getOrDefault(args.get(0).getIndex(),
+                    resolveVar.apply(args.get(0)));
+            writer.callVoidPtrAS1("__espressomachine_serial_print_str", target);
+            return;
+        }
+
+        int nextArg = 1; // args.get(0) is the format string
+        int i = 0;
+        while (i < fmt.length()) {
+            int pct = fmt.indexOf('%', i);
+            if (pct < 0) {
+                emitChunk(writer, fmt.substring(i), internString);
+                break;
+            }
+            if (pct > i) {
+                emitChunk(writer, fmt.substring(i, pct), internString);
+            }
+            if (pct + 1 >= fmt.length()) {
+                writer.line("; ERROR: Serial.printf: dangling '%' in format");
+                writer.callVoid("__espressomachine_serial_write", "37");
+                break;
+            }
+            char spec = fmt.charAt(pct + 1);
+            i = pct + 2;
+            switch (spec) {
+                case '%' -> writer.callVoid("__espressomachine_serial_write", "37");
+                case 'd' -> {
+                    if (requireArg(writer, spec, nextArg, insn, false)) {
+                        writer.callVoid("__espressomachine_serial_print_int",
+                                resolveVar.apply(args.get(nextArg)));
+                        nextArg++;
+                    }
+                }
+                case 'u' -> {
+                    if (requireArg(writer, spec, nextArg, insn, false)) {
+                        writer.callVoid("__espressomachine_serial_print_uint",
+                                resolveVar.apply(args.get(nextArg)));
+                        nextArg++;
+                    }
+                }
+                case 'x' -> {
+                    if (emitRadix(writer, spec, 16, 0, nextArg, args, insn, resolveVar)) nextArg++;
+                }
+                case 'X' -> {
+                    if (emitRadix(writer, spec, 16, 1, nextArg, args, insn, resolveVar)) nextArg++;
+                }
+                case 'b' -> {
+                    if (emitRadix(writer, spec, 2, 0, nextArg, args, insn, resolveVar)) nextArg++;
+                }
+                case 'c' -> {
+                    if (requireArg(writer, spec, nextArg, insn, false)) {
+                        writer.callVoid("__espressomachine_serial_write",
+                                resolveVar.apply(args.get(nextArg)));
+                        nextArg++;
+                    }
+                }
+                case 's' -> {
+                    if (requireArg(writer, spec, nextArg, insn, true)) {
+                        Variable arg = args.get(nextArg);
+                        String global = objectRefs.get(arg.getIndex());
+                        String target = (global != null) ? global : resolveVar.apply(arg);
+                        writer.callVoidPtrAS1("__espressomachine_serial_print_str", target);
+                        nextArg++;
+                    }
+                }
+                default -> {
+                    writer.line("; ERROR: Serial.printf: unsupported format specifier '%"
+                            + spec + "'");
+                    writer.callVoid("__espressomachine_serial_write", "37");
+                    writer.callVoid("__espressomachine_serial_write", String.valueOf((int) spec));
+                }
+            }
+        }
+        if (nextArg < args.size()) {
+            writer.line("; ERROR: Serial.printf: " + (args.size() - nextArg)
+                    + " argument(s) not consumed by the format");
+        }
+    }
+
+    /** Transmit a non-empty literal chunk of the format string. */
+    private void emitChunk(LlvmWriter writer, String chunk,
+                           Function<String, String> internString) {
+        if (chunk.isEmpty()) return;
+        writer.callVoidPtrAS1("__espressomachine_serial_print_str", internString.apply(chunk));
+    }
+
+    /** Emit a hex/binary specifier, returning whether an argument was consumed. */
+    private boolean emitRadix(LlvmWriter writer, char spec, int radix, int upper,
+                              int argIdx, List<? extends Variable> args,
+                              InvokeInstruction insn,
+                              Function<Variable, String> resolveVar) {
+        if (!requireArg(writer, spec, argIdx, insn, false)) return false;
+        writer.callVoid("__espressomachine_serial_print_radix",
+                resolveVar.apply(args.get(argIdx)),
+                String.valueOf(radix), String.valueOf(upper));
+        return true;
+    }
+
+    /**
+     * Validate that the argument at {@code argIdx} exists and its declared type
+     * matches the specifier ({@code String} for {@code %s}, otherwise numeric).
+     */
+    private boolean requireArg(LlvmWriter writer, char spec, int argIdx,
+                               InvokeInstruction insn, boolean wantString) {
+        if (argIdx >= insn.getArguments().size()) {
+            writer.line("; ERROR: Serial.printf: format specifier '%" + spec
+                    + "' has no matching argument");
+            return false;
+        }
+        ValueType p = insn.getMethod().getDescriptor().parameterType(argIdx);
+        boolean isString = (p instanceof ValueType.Object o)
+                && "java.lang.String".equals(o.getClassName());
+        if (wantString != isString) {
+            writer.line("; ERROR: Serial.printf: specifier '%" + spec + "' expects a "
+                    + (wantString ? "String" : "numeric") + " argument");
+            return false;
+        }
+        return true;
     }
 
 }

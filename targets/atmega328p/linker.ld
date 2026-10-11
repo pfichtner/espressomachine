@@ -26,6 +26,7 @@ SECTIONS
     {
         *(.text*)
         *(.rodata*)
+        *(.progmem.data*)
     } > flash
 
     /* Initialized data — load from flash, run from SRAM */

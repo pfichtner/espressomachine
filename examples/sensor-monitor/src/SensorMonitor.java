@@ -37,13 +37,9 @@ public class SensorMonitor {
             // Write PWM value to pin 13
             GPIO.analogWrite(13, pwmValue);
 
-            // Log to serial monitor - construct log message with all values
-            Serial.print("Sensor:");
-            Serial.print(sensorValue);
-            Serial.print(",V:");
-            Serial.print((int) voltage);
-            Serial.print(",PWM:");
-            Serial.println(pwmValue);
+            // Log to serial monitor - printf expands at compile time, no heap
+            Serial.printf("Sensor:%d,V:%d,PWM:%d\r\n",
+                    sensorValue, (int) voltage, pwmValue);
 
             // Delay between samples (1 second)
             Delay.delay(1000);

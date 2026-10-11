@@ -71,6 +71,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     // lowering to identify constant arguments (Delay.time unit, GPIO pin, ...).
     private final Map<Integer, String> staticObjectRef = new HashMap<>();
 
+    // Variable index → raw text of a StringConstantInstruction result. Needed by
+    // intrinsic lowering that parses literal text (e.g. Serial.printf formats).
+    private final Map<Integer, String> stringLiterals = new HashMap<>();
+
     // Variables produced by COMPARE instructions (fused into branch icmp).
     private final Map<Integer, CompareInfo> compareVars = new HashMap<>();
 
@@ -383,7 +387,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         // Check for embedded intrinsics (GPIO, Delay) before regular call emission.
         if (module.intrinsics.isIntrinsic(insn)) {
             tmpCounter = module.intrinsics.emit(out, insn, varLiteral, tmpCounter,
-                    this::resolveVar, staticObjectRef);
+                    this::resolveVar, staticObjectRef, stringLiterals, module::internString);
             return;
         }
 
@@ -656,8 +660,9 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         if (!inEnumClinit && module != null) {
             String global = module.internString(insn.getConstant());
             staticObjectRef.put(insn.getReceiver().getIndex(), global);
+            stringLiterals.put(insn.getReceiver().getIndex(), insn.getConstant());
             out.append("  ").append(v(insn.getReceiver()))
-               .append(" = getelementptr i8, ptr ").append(global).append(", i32 0\n");
+               .append(" = getelementptr i8, ptr addrspace(1) ").append(global).append(", i32 0\n");
             return;
         }
         if (!inEnumClinit) {

@@ -7,7 +7,7 @@ declare void @__espressomachine_delay_ms(i32 %ms)
 declare void @__espressomachine_serial_begin(i32 %baud)
 declare void @__espressomachine_serial_write(i32 %b)
 declare void @__espressomachine_serial_print_int(i32 %n)
-declare void @__espressomachine_serial_print_str(ptr %s)
+declare void @__espressomachine_serial_print_str(ptr addrspace(1) %s)
 declare i32 @__espressomachine_random_long(i32 %bound)
 declare i32 @__espressomachine_random_range(i32 %min, i32 %max)
 

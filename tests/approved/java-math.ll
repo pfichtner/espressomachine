@@ -7,7 +7,7 @@ declare void @__espressomachine_delay_ms(i32 %ms)
 declare void @__espressomachine_serial_begin(i32 %baud)
 declare void @__espressomachine_serial_write(i32 %b)
 declare void @__espressomachine_serial_print_int(i32 %n)
-declare void @__espressomachine_serial_print_str(ptr %s)
+declare void @__espressomachine_serial_print_str(ptr addrspace(1) %s)
 
 define void @JavaMath__init_(ptr %v0) {
 BB0:

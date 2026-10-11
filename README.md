@@ -106,7 +106,7 @@ Java / Kotlin / Scala / Clojure source
 - **Escape analysis** — non-escaping objects stack-allocated (`alloca`); static objects become LLVM globals; heap-escaping allocations produce a compile-time error.
 - **Compile-time GPIO inlining** — `GPIO.digitalWrite(13, HIGH)` with a constant pin number compiles to a single `sbi`/`cbi` instruction; `GPIO.digitalRead(2)` with a constant pin inlines to a `PIND` load and bit-test.
 - **Dead-code elimination** — each runtime function lands in its own ELF section (`-function-sections`); `avr-ld --gc-sections` drops any section not reachable from the interrupt vector table. A Blink sketch that inlines all its GPIO calls carries no gpio.ll code at all.
-- **Serial (USART0)** — `Serial.begin()`, `Serial.print()`, `Serial.println()`, `Serial.available()`, `Serial.read()` backed by a busy-wait AVR runtime; compile-time constant baud rates are inlined as four MMIO stores.
+- **Serial (USART0)** — `Serial.begin()`, `Serial.print()`, `Serial.println()`, `Serial.printf()`, `Serial.available()`, `Serial.read()` backed by a busy-wait AVR runtime; compile-time constant baud rates are inlined as four MMIO stores, and `printf` formats are expanded at compile time.
 - **Non-blocking timing** — `Time.millis()` backed by a Timer0 overflow ISR; the compiler injects `__espressomachine_time_init()` before `setup()` only when `millis()` is referenced.
 - **Utility functions** — `Functions.map()` and `Functions.constrain()` match Arduino's macros; both are pure Java and get constant-folded or inlined by TeaVM.
 - **Arduino-style setup/loop** — entry classes without a `main()` can define `static void setup()` / `static void loop()`; EspressoMachine synthesizes the `main()` wrapper automatically.
@@ -216,6 +216,7 @@ Serial.begin(9600);
 Serial.print('A');
 Serial.println(42);
 Serial.println();           // CR+LF
+Serial.printf("Sensor:%d,V:%d\r\n", raw, (int) voltage);  // compile-time expansion
 int avail = Serial.available();
 int b     = Serial.read();
 
@@ -229,6 +230,8 @@ int clamped = Functions.constrain(raw, 0, 255);
 
 `GPIO` calls with compile-time-constant pin numbers are inlined to direct `sbi`/`cbi`/`PIND` load instructions; non-constant pins fall back to a runtime lookup table in `gpio.ll`. `Serial.begin()` with a constant baud rate is inlined as four USART register writes. `Time.millis()` is linked only when referenced; the Timer0 ISR and init are added automatically.
 
+`Serial.printf(fmt, ...)` is expanded entirely at compile time: the format string must be a literal, and each specifier is lowered to a direct print/write call (no runtime formatter, no `String` allocation). Supported specifiers: `%d`, `%u` (unsigned), `%x`/`%X` (hex, lower/upper), `%b` (binary), `%c`, `%s` (string-literal argument), and `%%`. Overloads accept up to four arguments mixing `int` and `String`; a specifier whose argument type does not match emits a `; ERROR:` comment in the generated IR. General `String` concatenation (`+`) and `String.format` remain unsupported (they require a heap).
+
 ## Memory model
 
 | Allocation | Pattern | LLVM | Status |
@@ -238,6 +241,8 @@ int clamped = Functions.constrain(raw, 0, 255);
 | Heap | `return new Counter()` (escapes) | compile error | intentional |
 
 Heap/GC is explicitly out of scope for the initial release.
+
+String literals are the one form of constant data: they are emitted into AVR program space (flash, `.progmem.data`) and referenced through `addrspace(1)` pointers, so they consume no SRAM. The Serial runtime reads them with `lpm` (`serial.ll`), which is why `Serial.print(String)`/`println(String)`/`printf` work without a `String` heap.
 
 ## Adding a new target
 
@@ -274,7 +279,7 @@ runtime/
   api/                               Target-agnostic Java stubs
     GPIO.java                        pinMode, digitalRead/Write, analogRead/Write
     Delay.java                       ms(), time()
-    Serial.java                      begin, print, println, available, read
+    Serial.java                      begin, print, println, printf, available, read
     Time.java                        millis()
     Functions.java                   map(), constrain()
     Random.java                      nextInt()

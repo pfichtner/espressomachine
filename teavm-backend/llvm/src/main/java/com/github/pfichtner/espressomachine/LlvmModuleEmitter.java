@@ -190,9 +190,15 @@ class LlvmModuleEmitter {
         if (stringGlobals.isEmpty()) return;
         stringGlobals.forEach((key, value) -> {
             String lit = escapeLlvmCString(key);
+            // The array holds one byte per source character plus the trailing NUL.
+            // Do NOT use lit.length(): escape sequences such as \0D encode a
+            // single byte with multiple characters.
+            // addrspace(1) = AVR program space → LLVM emits .progmem.data and
+            // reads it with lpm, which is required because string data lives in
+            // flash (the data address space only covers SRAM).
             out.append(value)
-               .append(" = private unnamed_addr constant [")
-               .append(lit.length() + 1).append(" x i8] c\"")
+               .append(" = private unnamed_addr addrspace(1) constant [")
+               .append(key.length() + 1).append(" x i8] c\"")
                .append(lit).append("\\00\"\n");
         });
         out.append("\n");

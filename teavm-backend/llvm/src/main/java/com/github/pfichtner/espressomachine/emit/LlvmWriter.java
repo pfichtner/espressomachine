@@ -128,6 +128,13 @@ public final class LlvmWriter {
         line("call void @" + fn + "(" + argList + ")");
     }
 
+    /** {@code call void @fn(ptr addrspace(1) a, ...)} — AVR program-space pointer. */
+    public void callVoidPtrAS1(String fn, Object... args) {
+        String argList = Arrays.stream(args)
+                .map(arg -> "ptr addrspace(1) " + arg).collect(Collectors.joining(", "));
+        line("call void @" + fn + "(" + argList + ")");
+    }
+
     /** {@code dst = call i32 @fn(i32 a, i32 b, ...)} */
     public void callI32(String dst, String fn, Object... args) {
         String argList = Arrays.stream(args).map(arg -> "i32 " + arg).collect(Collectors.joining(", "));
