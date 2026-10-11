@@ -134,12 +134,15 @@ st_start_container() {
         echo "      Serial device: $SERIAL_DEVICE @ ${BAUD} baud"
     fi
 
+    # Pin the emulation to wall-clock time so the blink-rate assertions do not
+    # depend on how fast the host can emulate the AVR (and to cut CPU usage).
     docker create --name "$CONTAINER" \
         "${extra[@]}" \
         -p "$WS_PORT:8080" \
-        -e "FILENAME=/$PROG_NAME.hex" \
+        -e "REALTIME=true" \
+        -e "FILENAME=$PROG_NAME.hex" \
         "$IMAGE" > /dev/null 2>&1 || st_logs_and_die "failed to create virtualavr container"
-    docker cp "$HEX_FILE" "$CONTAINER:/$PROG_NAME.hex" > /dev/null || die "failed to copy HEX into container"
+    docker cp "$HEX_FILE" "$CONTAINER:/sketch/$PROG_NAME.hex" > /dev/null || die "failed to copy HEX into container"
     docker start "$CONTAINER" > /dev/null 2>&1 || st_logs_and_die "failed to start virtualavr container"
 }
 
