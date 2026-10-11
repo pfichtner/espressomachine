@@ -9,10 +9,10 @@
 @Direction_SOUTH = global %Direction_t zeroinitializer
 @Direction_EAST = global %Direction_t zeroinitializer
 @Direction_WEST = global %Direction_t zeroinitializer
-@Direction_ENUM$VALUES = global ptr null
+@Direction_$VALUES = global ptr null
 @Pin_LED = global %Pin_t zeroinitializer
 @Pin_BUTTON = global %Pin_t zeroinitializer
-@Pin_ENUM$VALUES = global ptr null
+@Pin_$VALUES = global ptr null
 
 declare void @__espressomachine_gpio_pinmode(i32 %pin, i32 %mode)
 declare void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value)
@@ -44,12 +44,14 @@ BB1:
   br i1 %cond0, label %BB2, label %BB3
 BB2:
   %v3 = add i32 0, 0
-  %rettrunc1 = trunc i32 0 to i8
-  ret i8 %rettrunc1
+  br label %BB4
 BB3:
   %v4 = add i32 0, 1
-  %rettrunc2 = trunc i32 1 to i8
-  ret i8 %rettrunc2
+  br label %BB4
+BB4:
+  %v5 = phi i32 [ 0, %BB2 ], [ 1, %BB3 ]
+  %rettrunc1 = trunc i32 %v5 to i8
+  ret i8 %rettrunc1
 }
 
 define i32 @EnumTest_encode(ptr %v1) {
@@ -104,6 +106,14 @@ BB1:
   ret void
 }
 
+define void @Direction__init_(ptr %v0, ptr %v1, i32 %v2) {
+BB0:
+  ; init_class Direction
+  br label %BB1
+BB1:
+  ret void
+}
+
 define void @Direction__clinit_() {
 BB0:
   br label %BB1
@@ -133,23 +143,25 @@ BB1:
   store i32 3, ptr %gep3
   ; static object already initialized as global: @Direction_WEST
   %v13 = add i32 0, 4
-  %v14 = inttoptr i32 0 to ptr
-  %v15 = add i32 0, 0
-  %v16 = getelementptr i8, ptr @Direction_NORTH, i32 0
+  %v16 = inttoptr i32 0 to ptr
+  %v14 = add i32 0, 0
+  %v15 = getelementptr i8, ptr @Direction_NORTH, i32 0
   %v18 = add i32 0, 1
   %v19 = getelementptr i8, ptr @Direction_SOUTH, i32 0
   %v20 = add i32 0, 2
   %v21 = getelementptr i8, ptr @Direction_EAST, i32 0
   %v22 = add i32 0, 3
-  store ptr %v14, ptr @Direction_ENUM$VALUES
+  store ptr %v16, ptr @Direction_$VALUES
   ret void
 }
 
-define void @Direction__init_(ptr %v0, ptr %v1, i32 %v2) {
+define void @Pin__init_(ptr %v0, ptr %v1, i32 %v2, i32 %v3) {
 BB0:
-  ; init_class Direction
+  ; init_class Pin
   br label %BB1
 BB1:
+  %gep0 = getelementptr %Pin_t, ptr %v0, i32 0, i32 2
+  store i32 %v3, ptr %gep0
   ret void
 }
 
@@ -172,21 +184,11 @@ BB1:
   store i32 1, ptr %gep1
   ; static object already initialized as global: @Pin_BUTTON
   %v9 = add i32 0, 2
-  %v10 = inttoptr i32 0 to ptr
-  %v11 = add i32 0, 0
-  %v12 = getelementptr i8, ptr @Pin_LED, i32 0
+  %v12 = inttoptr i32 0 to ptr
+  %v10 = add i32 0, 0
+  %v11 = getelementptr i8, ptr @Pin_LED, i32 0
   %v14 = add i32 0, 1
-  store ptr %v10, ptr @Pin_ENUM$VALUES
-  ret void
-}
-
-define void @Pin__init_(ptr %v0, ptr %v1, i32 %v2, i32 %v3) {
-BB0:
-  ; init_class Pin
-  br label %BB1
-BB1:
-  %gep0 = getelementptr %Pin_t, ptr %v0, i32 0, i32 2
-  store i32 %v3, ptr %gep0
+  store ptr %v12, ptr @Pin_$VALUES
   ret void
 }
 
