@@ -58,13 +58,16 @@ public class AvrIntrinsics {
     public int emit(StringBuilder out, InvokeInstruction insn,
                     Map<Integer, String> constVars, int tmpCounter,
                     Function<Variable, String> resolveVar,
-                    Map<Integer, String> objectRefs) {
+                    Map<Integer, String> objectRefs,
+                    Map<Integer, String> stringLiterals,
+                    Function<String, String> internString) {
         LlvmWriter writer = new LlvmWriter(out, tmpCounter);
         String cls = insn.getMethod().getClassName();
         return emitters.stream()
                 .filter(e -> e.canHandle(cls))
                 .findFirst()
-                .map(e -> e.emit(writer, insn, constVars, resolveVar, objectRefs))
+                .map(e -> e.emit(writer, insn, constVars, resolveVar, objectRefs,
+                        stringLiterals, internString))
                 .orElse(tmpCounter);
     }
 

@@ -9,7 +9,9 @@ declare void @__espressomachine_delay_ms(i32 %ms)
 declare void @__espressomachine_serial_begin(i32 %baud)
 declare void @__espressomachine_serial_write(i32 %b)
 declare void @__espressomachine_serial_print_int(i32 %n)
-declare void @__espressomachine_serial_print_str(ptr %s)
+declare void @__espressomachine_serial_print_str(ptr addrspace(1) %s)
+declare void @__espressomachine_serial_print_uint(i32 %n)
+declare void @__espressomachine_serial_print_radix(i32 %n, i32 %radix, i32 %upper)
 
 define void @SensorMonitor__init_(ptr %v0) {
 BB0:
@@ -32,8 +34,8 @@ BB1:
   %_t0 = load volatile i8, ptr inttoptr (i16 36 to ptr)
   %_t1 = or i8 %_t0, 32
   store volatile i8 %_t1, ptr inttoptr (i16 36 to ptr)
-  %v4 = getelementptr i8, ptr @espressomachine_string_0, i32 0
-  call void @__espressomachine_serial_print_str(ptr @espressomachine_string_0)
+  %v4 = getelementptr i8, ptr addrspace(1) @espressomachine_string_0, i32 0
+  call void @__espressomachine_serial_print_str(ptr addrspace(1) @espressomachine_string_0)
   call void @__espressomachine_serial_write(i32 13)
   call void @__espressomachine_serial_write(i32 10)
   br label %BB2
@@ -52,27 +54,24 @@ BB2:
   %v16 = fptosi float %v15 to i32
   %v17 = add i32 0, 13
   call void @__espressomachine_gpio_analogWrite(i32 13, i32 %v16)
-  %v18 = getelementptr i8, ptr @espressomachine_string_1, i32 0
-  call void @__espressomachine_serial_print_str(ptr @espressomachine_string_1)
+  %v18 = getelementptr i8, ptr addrspace(1) @espressomachine_string_1, i32 0
+  %v19 = fptosi float %v11 to i32
+  call void @__espressomachine_serial_print_str(ptr addrspace(1) @espressomachine_string_2)
   call void @__espressomachine_serial_print_int(i32 %v6)
-  %v19 = getelementptr i8, ptr @espressomachine_string_2, i32 0
-  call void @__espressomachine_serial_print_str(ptr @espressomachine_string_2)
-  %v20 = fptosi float %v11 to i32
-  call void @__espressomachine_serial_print_int(i32 %v20)
-  %v21 = getelementptr i8, ptr @espressomachine_string_3, i32 0
-  call void @__espressomachine_serial_print_str(ptr @espressomachine_string_3)
+  call void @__espressomachine_serial_print_str(ptr addrspace(1) @espressomachine_string_3)
+  call void @__espressomachine_serial_print_int(i32 %v19)
+  call void @__espressomachine_serial_print_str(ptr addrspace(1) @espressomachine_string_4)
   call void @__espressomachine_serial_print_int(i32 %v16)
-  %v23 = add i32 0, 13
-  call void @__espressomachine_serial_write(i32 13)
-  %v24 = add i32 0, 10
-  call void @__espressomachine_serial_write(i32 10)
-  %v22 = add i32 0, 1000
+  call void @__espressomachine_serial_print_str(ptr addrspace(1) @espressomachine_string_5)
+  %v20 = add i32 0, 1000
   call void @__espressomachine_delay_ms(i32 1000)
   br label %BB2
 }
 
-@espressomachine_string_0 = private unnamed_addr constant [31 x i8] c"=== Sensor Monitor Started ===\00"
-@espressomachine_string_1 = private unnamed_addr constant [8 x i8] c"Sensor:\00"
-@espressomachine_string_2 = private unnamed_addr constant [4 x i8] c",V:\00"
-@espressomachine_string_3 = private unnamed_addr constant [6 x i8] c",PWM:\00"
+@espressomachine_string_0 = private unnamed_addr addrspace(1) constant [31 x i8] c"=== Sensor Monitor Started ===\00"
+@espressomachine_string_1 = private unnamed_addr addrspace(1) constant [24 x i8] c"Sensor:%d,V:%d,PWM:%d\0D\0A\00"
+@espressomachine_string_2 = private unnamed_addr addrspace(1) constant [8 x i8] c"Sensor:\00"
+@espressomachine_string_3 = private unnamed_addr addrspace(1) constant [4 x i8] c",V:\00"
+@espressomachine_string_4 = private unnamed_addr addrspace(1) constant [6 x i8] c",PWM:\00"
+@espressomachine_string_5 = private unnamed_addr addrspace(1) constant [3 x i8] c"\0D\0A\00"
 
