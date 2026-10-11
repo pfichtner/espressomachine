@@ -47,10 +47,9 @@ st_find_hex "${1:-}"
 # nested Docker where mount propagation is denied) don't propagate bind-mount
 # contents, and `docker cp` works everywhere.
 #
-# virtualavr's entrypoint launches `node /app/virtualavr.js $FILENAME` and the
-# .hex branch reads `fs.readFileSync(inputFilename)` with a relative path (CWD
-# is /app), so we copy the HEX into the container root and reference it by its
-# absolute path /Blink.hex.
+# virtualavr's entrypoint resolves sketches/hex relative to its /sketch workdir
+# (`virtualavr-compile-arduino "/sketch/$FILENAME" ...`), so the HEX is copied
+# to /sketch/$PROG_NAME.hex and FILENAME is set to its basename.
 # ---------------------------------------------------------------------------
 st_start_container
 
