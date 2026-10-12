@@ -82,43 +82,17 @@ public class Serial {
      * </pre>
      *
      * Each specifier consumes the next argument: numeric/char specifiers take an
-     * {@code int} argument, {@code %s} takes a {@code String} argument. Unlike C
-     * printf no newline is appended; include {@code "\r\n"} in the format if needed.
+     * {@code int} argument (a {@code char} is accepted and used as its code point),
+     * {@code %s} takes a {@code String} literal. Unlike C printf no newline is
+     * appended; include {@code "\r\n"} in the format if needed.
      *
-     * The {@code int}/{@code String} overloads below cover every argument
-     * combination of up to four arguments.
+     * <p>The format must be a compile-time string literal and the arguments are
+     * consumed and expanded at compile time (a {@code String} heap is not
+     * available on the target). Only {@code int}, {@code char} and {@code String}
+     * literal arguments are supported; other types are rejected with a
+     * diagnostic comment in the generated IR.
      */
-    public static native void printf(String fmt);
-    public static native void printf(String fmt, int a);
-    public static native void printf(String fmt, String a);
-    public static native void printf(String fmt, int a, int b);
-    public static native void printf(String fmt, int a, String b);
-    public static native void printf(String fmt, String a, int b);
-    public static native void printf(String fmt, String a, String b);
-    public static native void printf(String fmt, int a, int b, int c);
-    public static native void printf(String fmt, int a, int b, String c);
-    public static native void printf(String fmt, int a, String b, int c);
-    public static native void printf(String fmt, int a, String b, String c);
-    public static native void printf(String fmt, String a, int b, int c);
-    public static native void printf(String fmt, String a, int b, String c);
-    public static native void printf(String fmt, String a, String b, int c);
-    public static native void printf(String fmt, String a, String b, String c);
-    public static native void printf(String fmt, int a, int b, int c, int d);
-    public static native void printf(String fmt, int a, int b, int c, String d);
-    public static native void printf(String fmt, int a, int b, String c, int d);
-    public static native void printf(String fmt, int a, int b, String c, String d);
-    public static native void printf(String fmt, int a, String b, int c, int d);
-    public static native void printf(String fmt, int a, String b, int c, String d);
-    public static native void printf(String fmt, int a, String b, String c, int d);
-    public static native void printf(String fmt, int a, String b, String c, String d);
-    public static native void printf(String fmt, String a, int b, int c, int d);
-    public static native void printf(String fmt, String a, int b, int c, String d);
-    public static native void printf(String fmt, String a, int b, String c, int d);
-    public static native void printf(String fmt, String a, int b, String c, String d);
-    public static native void printf(String fmt, String a, String b, int c, int d);
-    public static native void printf(String fmt, String a, String b, int c, String d);
-    public static native void printf(String fmt, String a, String b, String c, int d);
-    public static native void printf(String fmt, String a, String b, String c, String d);
+    public static native void printf(String fmt, Object... args);
 
     private Serial() {}
 }

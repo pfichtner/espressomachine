@@ -2,8 +2,11 @@ package com.github.pfichtner.espressomachine;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -48,6 +51,7 @@ import org.teavm.model.instructions.PutFieldInstruction;
 import org.teavm.model.instructions.RaiseInstruction;
 import org.teavm.model.instructions.StringConstantInstruction;
 import org.teavm.model.instructions.SwitchInstruction;
+import org.teavm.model.instructions.UnwrapArrayInstruction;
 
 /**
  * Translates a single TeaVM method Program to LLVM IR text.
@@ -77,6 +81,26 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     // Variables produced by COMPARE instructions (fused into branch icmp).
     private final Map<Integer, CompareInfo> compareVars = new HashMap<>();
+
+    // ---- varargs splicing (e.g. Serial.printf(String, Object...)) ----
+    // Copy edges (receiver -> source) introduced by assign/null-check. Varargs
+    // call sites reach the backing array through such aliases; canonicalising a
+    // variable collapses the alias chain to the array's origin.
+    private final Map<Integer, Integer> varargAlias = new HashMap<>();
+    // Canonical array variable index -> element variables in index order.
+    private final Map<Integer, List<Variable>> varargElements = new HashMap<>();
+    // Canonical array variables that are consumed by a varargs intrinsic (their
+    // construction and element stores must be suppressed).
+    private final Set<Integer> varargArrays = new HashSet<>();
+    // Boxing result variable -> the primitive argument passed to valueOf(). The
+    // JDK boxing stubs return null, so the original primitive must be recovered
+    // from the call itself.
+    private final Map<Integer, Variable> boxedPrimitives = new HashMap<>();
+    // Integer-constant variables (used to order array element stores).
+    private final Map<Integer, Integer> intConstants = new HashMap<>();
+    // Integer-constant variables used only as the index/length operands of a
+    // spliced varargs array; their materialisation is suppressed as well.
+    private final Set<Integer> varargScratch = new HashSet<>();
 
     // Counter for anonymous LLVM values (%tmp0, %tmp1, …) used inside branches.
     private int tmpCounter = 0;
@@ -131,12 +155,115 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     void emit() {
         escape = EscapeAnalyzer.analyze(program, method);
+        collectVarargs();
         emitFunctionHeader();
         IntStream.range(0, program.basicBlockCount()).forEach(i -> {
             BasicBlock bb = program.basicBlockAt(i);
             if (bb != null) emitBlock(bb, i);
         });
         out.append("}\n\n");
+    }
+
+    // ------------------------------------------------------------------
+    // Varargs splicing
+    // ------------------------------------------------------------------
+
+    /**
+     * Pre-scan the program for varargs intrinsic calls (e.g.
+     * {@code Serial.printf(String, Object...)}). TeaVM lowers the trailing
+     * varargs into a freshly allocated array whose elements are set by
+     * {@code putelem}. Because the target has no heap, that array cannot be
+     * materialised: instead we splice its elements into the call as individual
+     * arguments and suppress the array construction. Primitive elements are
+     * boxed via {@code Integer.valueOf(...)} etc.; those stubs return null, so
+     * the primitive is recovered from the boxing call itself.
+     */
+    private void collectVarargs() {
+        if (module == null) return;
+
+        // Pass 1: alias edges, integer constants and boxing invokes.
+        forEachInstruction(insn -> {
+            if (insn instanceof AssignInstruction a) {
+                varargAlias.put(a.getReceiver().getIndex(), a.getAssignee().getIndex());
+                copyIntConstant(a.getReceiver().getIndex(), a.getAssignee().getIndex());
+            } else if (insn instanceof NullCheckInstruction n) {
+                varargAlias.put(n.getReceiver().getIndex(), n.getValue().getIndex());
+                copyIntConstant(n.getReceiver().getIndex(), n.getValue().getIndex());
+            } else if (insn instanceof UnwrapArrayInstruction u) {
+                varargAlias.put(u.getReceiver().getIndex(), u.getArray().getIndex());
+            } else if (insn instanceof IntegerConstantInstruction c) {
+                intConstants.put(c.getReceiver().getIndex(), c.getConstant());
+            } else if (insn instanceof InvokeInstruction inv
+                    && inv.getReceiver() != null && isBoxingCall(inv)
+                    && !inv.getArguments().isEmpty()) {
+                boxedPrimitives.put(inv.getReceiver().getIndex(), inv.getArguments().get(0));
+            }
+        });
+
+        // Pass 2: canonical array variable for each varargs call.
+        forEachInstruction(insn -> {
+            if (insn instanceof InvokeInstruction inv && module.intrinsics.isVarargs(inv)) {
+                List<? extends Variable> args = inv.getArguments();
+                if (!args.isEmpty()) {
+                    varargArrays.add(canon(args.get(args.size() - 1).getIndex()));
+                }
+            }
+        });
+
+        // Pass 3: collect the element variables of those arrays, ordered by index.
+        Map<Integer, TreeMap<Integer, Variable>> elems = new HashMap<>();
+        forEachInstruction(insn -> {
+            if (insn instanceof PutElementInstruction pe) {
+                int arr = canon(pe.getArray().getIndex());
+                if (!varargArrays.contains(arr)) return;
+                varargScratch.add(canon(pe.getIndex().getIndex()));
+                TreeMap<Integer, Variable> m = elems.computeIfAbsent(arr, k -> new TreeMap<>());
+                int idx = intConstants.getOrDefault(canon(pe.getIndex().getIndex()), m.size());
+                m.put(idx, resolveBoxing(pe.getValue()));
+            } else if (insn instanceof ConstructArrayInstruction ca
+                    && varargArrays.contains(canon(ca.getReceiver().getIndex()))) {
+                varargScratch.add(canon(ca.getSize().getIndex()));
+            }
+        });
+        elems.forEach((arr, m) -> varargElements.put(arr, new ArrayList<>(m.values())));
+    }
+
+    private void forEachInstruction(java.util.function.Consumer<org.teavm.model.Instruction> action) {
+        for (int bi = 0; bi < program.basicBlockCount(); bi++) {
+            BasicBlock bb = program.basicBlockAt(bi);
+            if (bb == null) continue;
+            for (var insn : bb) action.accept(insn);
+        }
+    }
+
+    private void copyIntConstant(int receiver, int source) {
+        Integer c = intConstants.get(source);
+        if (c != null) intConstants.put(receiver, c);
+    }
+
+    /** Follow assign/null-check proxy edges to the underlying variable. */
+    private int canon(int var) {
+        Integer src = varargAlias.get(var);
+        if (src == null) return var;
+        int root = canon(src);
+        varargAlias.put(var, root);
+        return root;
+    }
+
+    /** Recover the primitive behind a boxed varargs element, if any. */
+    private Variable resolveBoxing(Variable value) {
+        Variable prim = boxedPrimitives.get(canon(value.getIndex()));
+        return prim != null ? prim : value;
+    }
+
+    private static boolean isBoxingCall(InvokeInstruction inv) {
+        if (!"valueOf".equals(inv.getMethod().getName())) return false;
+        return switch (inv.getMethod().getClassName()) {
+            case "java.lang.Integer", "java.lang.Character", "java.lang.Byte",
+                 "java.lang.Short", "java.lang.Boolean", "java.lang.Long",
+                 "java.lang.Float", "java.lang.Double" -> true;
+            default -> false;
+        };
     }
 
     // ------------------------------------------------------------------
@@ -196,6 +323,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     @Override
     public void visit(IntegerConstantInstruction insn) {
+        // Index/length operands of a spliced varargs array are unused.
+        if (module != null && varargScratch.contains(insn.getReceiver().getIndex())) {
+            return;
+        }
         // Record as inline constant; emit a materialization instruction so that
         // LLVM can see the value even if the variable is used across blocks.
         varLiteral.put(insn.getReceiver().getIndex(), String.valueOf(insn.getConstant()));
@@ -229,6 +360,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     @Override
     public void visit(AssignInstruction insn) {
+        // Suppress aliases of an array consumed by a varargs intrinsic.
+        if (module != null && varargArrays.contains(canon(insn.getReceiver().getIndex()))) {
+            return;
+        }
         // Propagate literals through assign chains.
         String lit = varLiteral.get(insn.getAssignee().getIndex());
         if (lit != null) varLiteral.put(insn.getReceiver().getIndex(), lit);
@@ -386,8 +521,19 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
         // Check for embedded intrinsics (GPIO, Delay) before regular call emission.
         if (module.intrinsics.isIntrinsic(insn)) {
-            tmpCounter = module.intrinsics.emit(out, insn, varLiteral, tmpCounter,
-                    this::resolveVar, staticObjectRef, stringLiterals, module::internString);
+            if (module.intrinsics.isVarargs(insn)) {
+                List<? extends Variable> args = insn.getArguments();
+                List<Variable> elems = args.isEmpty()
+                        ? List.of()
+                        : varargElements.getOrDefault(canon(args.get(args.size() - 1).getIndex()),
+                                                      List.of());
+                tmpCounter = module.intrinsics.emitVarargs(out, insn, elems, varLiteral,
+                        tmpCounter, this::resolveVar, staticObjectRef, stringLiterals,
+                        module::internString);
+            } else {
+                tmpCounter = module.intrinsics.emit(out, insn, varLiteral, tmpCounter,
+                        this::resolveVar, staticObjectRef, stringLiterals, module::internString);
+            }
             return;
         }
 
@@ -487,6 +633,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     @Override
     public void visit(NullCheckInstruction insn) {
+        // Suppress aliases of an array consumed by a varargs intrinsic.
+        if (module != null && varargArrays.contains(canon(insn.getReceiver().getIndex()))) {
+            return;
+        }
         // For embedded targets, null checks are omitted. Propagate the variable.
         compareVars.computeIfPresent(insn.getValue().getIndex(),
                 (k, v) -> { compareVars.put(insn.getReceiver().getIndex(), v); return v; });
@@ -707,6 +857,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     @Override
     public void visit(ConstructArrayInstruction insn) {
+        // A varargs array consumed by an intrinsic is spliced away entirely.
+        if (module != null && varargArrays.contains(canon(insn.getReceiver().getIndex()))) {
+            return;
+        }
         // Array allocation is not supported on embedded (no heap).
         // In enum <clinit> the array is for $VALUES — emit null ptr so putstatic is valid.
         if (!inEnumClinit) {
@@ -718,6 +872,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     @Override
     public void visit(PutElementInstruction insn) {
         if (inEnumClinit) return;  // skip $VALUES array stores
+        // Element stores into a spliced varargs array are handled separately.
+        if (module != null && varargArrays.contains(canon(insn.getArray().getIndex()))) {
+            return;
+        }
         out.append("  ; ERROR: array element store not supported on embedded targets\n");
     }
 

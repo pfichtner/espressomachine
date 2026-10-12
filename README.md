@@ -230,7 +230,7 @@ int clamped = Functions.constrain(raw, 0, 255);
 
 `GPIO` calls with compile-time-constant pin numbers are inlined to direct `sbi`/`cbi`/`PIND` load instructions; non-constant pins fall back to a runtime lookup table in `gpio.ll`. `Serial.begin()` with a constant baud rate is inlined as four USART register writes. `Time.millis()` is linked only when referenced; the Timer0 ISR and init are added automatically.
 
-`Serial.printf(fmt, ...)` is expanded entirely at compile time: the format string must be a literal, and each specifier is lowered to a direct print/write call (no runtime formatter, no `String` allocation). Supported specifiers: `%d`, `%u` (unsigned), `%x`/`%X` (hex, lower/upper), `%b` (binary), `%c`, `%s` (string-literal argument), and `%%`. Overloads accept up to four arguments mixing `int` and `String`; a specifier whose argument type does not match emits a `; ERROR:` comment in the generated IR. General `String` concatenation (`+`) and `String.format` remain unsupported (they require a heap).
+`Serial.printf(fmt, ...)` is expanded entirely at compile time: the format string must be a literal, and each specifier is lowered to a direct print/write call (no runtime formatter, no `String` allocation). Supported specifiers: `%d`, `%u` (unsigned), `%x`/`%X` (hex, lower/upper), `%b` (binary), `%c`, `%s` (string-literal argument), and `%%`. The signature is `printf(String, Object...)`; the trailing array is spliced away by the backend so `int`, `char` and `String` literal arguments can be passed in any number. A specifier whose argument type does not match emits a `; ERROR:` comment in the generated IR. General `String` concatenation (`+`) and `String.format` remain unsupported (they require a heap).
 
 ## Memory model
 
