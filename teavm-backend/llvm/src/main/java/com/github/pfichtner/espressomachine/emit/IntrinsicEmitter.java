@@ -31,6 +31,30 @@ public interface IntrinsicEmitter {
         return emit(writer, insn, constVars, resolveVar, objectRefs);
     }
 
+    /**
+     * Whether the invoke targets a varargs method whose trailing array argument
+     * should be spliced into individual arguments. Emitters that opt in receive
+     * {@link #emitVarargs} instead of {@link #emit}; the caller is then
+     * responsible for removing the now-unused array construction.
+     */
+    default boolean isVarargs(InvokeInstruction insn) {
+        return false;
+    }
+
+    /**
+     * Emit a varargs intrinsic. {@code args} holds the method's fixed arguments
+     * (the leading non-array parameters) followed by the elements of the trailing
+     * array argument, in order. The default is never reached for emitters that
+     * report {@link #isVarargs}.
+     */
+    default int emitVarargs(LlvmWriter writer, InvokeInstruction insn,
+            List<? extends Variable> fixedArgs, List<Variable> varargs,
+            Map<Integer, String> constVars, Function<Variable, String> resolveVar,
+            Map<Integer, String> objectRefs, Map<Integer, String> stringLiterals,
+            Function<String, String> internString) {
+        return emit(writer, insn, constVars, resolveVar, objectRefs, stringLiterals, internString);
+    }
+
     String declarations(Map<String, Program> programs);
 
     default void emitFallback(LlvmWriter writer, InvokeInstruction insn, List<? extends Variable> args,

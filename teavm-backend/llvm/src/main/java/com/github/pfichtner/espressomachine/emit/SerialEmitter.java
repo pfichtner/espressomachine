@@ -2,9 +2,11 @@ package com.github.pfichtner.espressomachine.emit;
 
 import static com.github.pfichtner.espressomachine.emit.InvokeInstructions.isUsedIn;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.IntPredicate;
 
 import org.teavm.model.Program;
 import org.teavm.model.ValueType;
@@ -62,10 +64,39 @@ public class SerialEmitter implements IntrinsicEmitter {
             case "read"      -> emitRead(writer, insn, resolveVar);
             case "print"     -> emitPrint(writer, args, insn, objectRefs, resolveVar);
             case "println"   -> emitPrintln(writer, args, insn, objectRefs, resolveVar);
-            case "printf"    -> emitPrintf(writer, insn, objectRefs, stringLiterals,
-                                           internString, resolveVar);
+            case "printf"    -> emitPrintfDescriptor(writer, insn, objectRefs,
+                                           stringLiterals, internString, resolveVar);
             default          -> emitFallback(writer, insn, args, resolveVar);
         }
+        return writer.tmpCounter();
+    }
+
+    @Override
+    public boolean isVarargs(InvokeInstruction insn) {
+        return "printf".equals(insn.getMethod().getName());
+    }
+
+    @Override
+    public int emitVarargs(LlvmWriter writer, InvokeInstruction insn,
+                           List<? extends Variable> fixedArgs, List<Variable> varargs,
+                           Map<Integer, String> constVars,
+                           Function<Variable, String> resolveVar,
+                           Map<Integer, String> objectRefs,
+                           Map<Integer, String> stringLiterals,
+                           Function<String, String> internString) {
+        // The fixed arguments are the format string; the array elements (already
+        // unboxed by the backend) follow as ordinary arguments.
+        List<Variable> args = new ArrayList<>(fixedArgs.size() + varargs.size());
+        args.addAll(fixedArgs);
+        args.addAll(varargs);
+        // Element kind is not carried by the varargs descriptor, so classify by
+        // value: a string literal is a registered global, everything else is numeric.
+        IntPredicate indexIsString = i -> {
+            Variable v = args.get(i);
+            return objectRefs.containsKey(v.getIndex()) || stringLiterals.containsKey(v.getIndex());
+        };
+        expandFormat(writer, insn, args, indexIsString, objectRefs, stringLiterals,
+                internString, resolveVar);
         return writer.tmpCounter();
     }
 
@@ -188,17 +219,39 @@ public class SerialEmitter implements IntrinsicEmitter {
     // ---- printf: compile-time format expansion ----
 
     /**
+     * Lower a non-varargs {@code Serial.printf} (kept for compatibility) by
+     * taking the argument kinds from the method descriptor.
+     */
+    private void emitPrintfDescriptor(LlvmWriter writer, InvokeInstruction insn,
+                                      Map<Integer, String> objectRefs,
+                                      Map<Integer, String> stringLiterals,
+                                      Function<String, String> internString,
+                                      Function<Variable, String> resolveVar) {
+        IntPredicate indexIsString = i -> {
+            ValueType p = insn.getMethod().getDescriptor().parameterType(i);
+            return (p instanceof ValueType.Object o)
+                    && "java.lang.String".equals(o.getClassName());
+        };
+        expandFormat(writer, insn, insn.getArguments(), indexIsString, objectRefs,
+                stringLiterals, internString, resolveVar);
+    }
+
+    /**
      * Lower a {@code Serial.printf} call by expanding its (string-literal) format
      * into a flat sequence of print/write calls. No runtime formatter or String
-     * heap is involved; each specifier consumes the next argument, whose declared
-     * type is validated against the specifier.
+     * heap is involved; each specifier consumes the next argument, whose type is
+     * validated against the specifier via {@code indexIsString}.
+     *
+     * @param args          argument 0 is the format; 1..n are the values
+     * @param indexIsString decides, by argument position, whether an argument is
+     *                      a String (true) or numeric (false)
      */
-    private void emitPrintf(LlvmWriter writer, InvokeInstruction insn,
-                            Map<Integer, String> objectRefs,
-                            Map<Integer, String> stringLiterals,
-                            Function<String, String> internString,
-                            Function<Variable, String> resolveVar) {
-        List<? extends Variable> args = insn.getArguments();
+    private void expandFormat(LlvmWriter writer, InvokeInstruction insn,
+                              List<? extends Variable> args, IntPredicate indexIsString,
+                              Map<Integer, String> objectRefs,
+                              Map<Integer, String> stringLiterals,
+                              Function<String, String> internString,
+                              Function<Variable, String> resolveVar) {
         if (args.isEmpty()) return;
 
         String fmt = stringLiterals.get(args.get(0).getIndex());
@@ -231,37 +284,37 @@ public class SerialEmitter implements IntrinsicEmitter {
             switch (spec) {
                 case '%' -> writer.callVoid("__espressomachine_serial_write", "37");
                 case 'd' -> {
-                    if (requireArg(writer, spec, nextArg, insn, false)) {
+                    if (requireArg(writer, spec, nextArg, args, indexIsString, false)) {
                         writer.callVoid("__espressomachine_serial_print_int",
                                 resolveVar.apply(args.get(nextArg)));
                         nextArg++;
                     }
                 }
                 case 'u' -> {
-                    if (requireArg(writer, spec, nextArg, insn, false)) {
+                    if (requireArg(writer, spec, nextArg, args, indexIsString, false)) {
                         writer.callVoid("__espressomachine_serial_print_uint",
                                 resolveVar.apply(args.get(nextArg)));
                         nextArg++;
                     }
                 }
                 case 'x' -> {
-                    if (emitRadix(writer, spec, 16, 0, nextArg, args, insn, resolveVar)) nextArg++;
+                    if (emitRadix(writer, spec, 16, 0, nextArg, args, indexIsString, resolveVar)) nextArg++;
                 }
                 case 'X' -> {
-                    if (emitRadix(writer, spec, 16, 1, nextArg, args, insn, resolveVar)) nextArg++;
+                    if (emitRadix(writer, spec, 16, 1, nextArg, args, indexIsString, resolveVar)) nextArg++;
                 }
                 case 'b' -> {
-                    if (emitRadix(writer, spec, 2, 0, nextArg, args, insn, resolveVar)) nextArg++;
+                    if (emitRadix(writer, spec, 2, 0, nextArg, args, indexIsString, resolveVar)) nextArg++;
                 }
                 case 'c' -> {
-                    if (requireArg(writer, spec, nextArg, insn, false)) {
+                    if (requireArg(writer, spec, nextArg, args, indexIsString, false)) {
                         writer.callVoid("__espressomachine_serial_write",
                                 resolveVar.apply(args.get(nextArg)));
                         nextArg++;
                     }
                 }
                 case 's' -> {
-                    if (requireArg(writer, spec, nextArg, insn, true)) {
+                    if (requireArg(writer, spec, nextArg, args, indexIsString, true)) {
                         Variable arg = args.get(nextArg);
                         String global = objectRefs.get(arg.getIndex());
                         String target = (global != null) ? global : resolveVar.apply(arg);
@@ -293,9 +346,9 @@ public class SerialEmitter implements IntrinsicEmitter {
     /** Emit a hex/binary specifier, returning whether an argument was consumed. */
     private boolean emitRadix(LlvmWriter writer, char spec, int radix, int upper,
                               int argIdx, List<? extends Variable> args,
-                              InvokeInstruction insn,
+                              IntPredicate indexIsString,
                               Function<Variable, String> resolveVar) {
-        if (!requireArg(writer, spec, argIdx, insn, false)) return false;
+        if (!requireArg(writer, spec, argIdx, args, indexIsString, false)) return false;
         writer.callVoid("__espressomachine_serial_print_radix",
                 resolveVar.apply(args.get(argIdx)),
                 String.valueOf(radix), String.valueOf(upper));
@@ -303,19 +356,18 @@ public class SerialEmitter implements IntrinsicEmitter {
     }
 
     /**
-     * Validate that the argument at {@code argIdx} exists and its declared type
-     * matches the specifier ({@code String} for {@code %s}, otherwise numeric).
+     * Validate that the argument at {@code argIdx} exists and its type matches the
+     * specifier ({@code String} for {@code %s}, otherwise numeric).
      */
     private boolean requireArg(LlvmWriter writer, char spec, int argIdx,
-                               InvokeInstruction insn, boolean wantString) {
-        if (argIdx >= insn.getArguments().size()) {
+                               List<? extends Variable> args, IntPredicate indexIsString,
+                               boolean wantString) {
+        if (argIdx >= args.size()) {
             writer.line("; ERROR: Serial.printf: format specifier '%" + spec
                     + "' has no matching argument");
             return false;
         }
-        ValueType p = insn.getMethod().getDescriptor().parameterType(argIdx);
-        boolean isString = (p instanceof ValueType.Object o)
-                && "java.lang.String".equals(o.getClassName());
+        boolean isString = indexIsString.test(argIdx);
         if (wantString != isString) {
             writer.line("; ERROR: Serial.printf: specifier '%" + spec + "' expects a "
                     + (wantString ? "String" : "numeric") + " argument");

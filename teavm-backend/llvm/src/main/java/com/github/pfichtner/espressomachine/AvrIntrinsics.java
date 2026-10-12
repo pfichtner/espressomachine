@@ -51,6 +51,42 @@ public class AvrIntrinsics {
     }
 
     /**
+     * Whether {@code insn} targets an intrinsic declared with a varargs
+     * (trailing array) parameter, e.g. {@code Serial.printf(String, Object...)}.
+     */
+    public boolean isVarargs(InvokeInstruction insn) {
+        String cls = insn.getMethod().getClassName();
+        return emitters.stream()
+                .filter(e -> e.canHandle(cls))
+                .anyMatch(e -> e.isVarargs(insn));
+    }
+
+    /**
+     * Emit a varargs intrinsic, splicing the elements of the trailing array
+     * argument into the argument list. Delegates to the emitter owning the API.
+     */
+    public int emitVarargs(StringBuilder out, InvokeInstruction insn,
+                           List<Variable> varargs,
+                           Map<Integer, String> constVars, int tmpCounter,
+                           Function<Variable, String> resolveVar,
+                           Map<Integer, String> objectRefs,
+                           Map<Integer, String> stringLiterals,
+                           Function<String, String> internString) {
+        LlvmWriter writer = new LlvmWriter(out, tmpCounter);
+        String cls = insn.getMethod().getClassName();
+        // The trailing argument is the varargs array; the fixed arguments precede it.
+        List<? extends Variable> all = insn.getArguments();
+        List<? extends Variable> fixed = all.isEmpty()
+                ? List.of() : all.subList(0, all.size() - 1);
+        return emitters.stream()
+                .filter(e -> e.canHandle(cls))
+                .findFirst()
+                .map(e -> e.emitVarargs(writer, insn, fixed, varargs,
+                        constVars, resolveVar, objectRefs, stringLiterals, internString))
+                .orElse(tmpCounter);
+    }
+
+    /**
      * Emit the intrinsic — delegates to the matching emitter.
      *
      * @return updated tmpCounter
