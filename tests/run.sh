@@ -200,6 +200,20 @@ run_ll_test "noise-level-indicator" \
 run_mvn_test "noise-level-indicator-jvm" \
     "noise-level-indicator"
 
+# Gpio wrapper showcase: exercises all five wrapper methods, inlined to GPIO
+# intrinsics on AVR; JVM path verifies delegation to GPIO and the run() logic.
+run_ll_test "gpio-showcase" \
+    "examples/gpio-showcase/target/classes:$API_CLASSES" \
+    "GpioShowcase"
+
+run_hex_test "gpio-showcase-hex" \
+    "examples/gpio-showcase/target/classes:$API_CLASSES" \
+    "GpioShowcase" \
+    "$APPROVED_DIR/gpio-showcase.hex"
+
+run_mvn_test "gpio-showcase-jvm" \
+    "gpio-showcase"
+
 # Enum support: Direction (ordinal, ==, if-else), Pin (custom field)
 run_ll_test "enum" \
     "examples/enum/target/classes" \
@@ -351,6 +365,21 @@ if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-digitalread" ]
     if [[ "$FILTER" == "systemtest-digitalread" || -z "$FILTER" ]]; then
         echo "[systemtest-digitalread]"
         if bash tests/systemtest-digitalread.sh; then
+            echo "  PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "  FAIL"
+            FAIL=$((FAIL + 1))
+        fi
+    fi
+fi
+
+# Run the GpioShowcase program on virtualavr: inject pin 2 HIGH and verify the
+# wrapper-driven blink (digitalRead + digitalWrite) toggles pin 13.
+if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-gpio" ]]; then
+    if [[ "$FILTER" == "systemtest-gpio" || -z "$FILTER" ]]; then
+        echo "[systemtest-gpio]"
+        if bash tests/systemtest-gpio.sh; then
             echo "  PASS"
             PASS=$((PASS + 1))
         else
