@@ -46,6 +46,7 @@
         <module>delay-time</module>
         <module>thread-sleep</module>
         <module>noise-level-indicator</module>
+        <module>gpio-showcase</module>
         <module>enum</module>
         <module>memory</module>
         <module>objects</module>
