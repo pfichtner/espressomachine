@@ -11,7 +11,9 @@
 #   STEPS          total number of steps for [n/N] numbering
 #   ST_SERIAL      "1" for the serial variant (mounts /dev)   (default: off)
 #   BAUD           baud rate; required when ST_SERIAL=1
-#   ST_PAUSE       run paused until the "unpause" control msg (ST_SERIAL only)
+#   ST_PAUSE       "1" to boot paused until the "unpause" control msg; lets a
+#                  test inject pin/ADC state before the sketch executes.
+#                  Defaults to on for serial variants, off otherwise.
 #
 # Provided (in calling order):
 #   st_init               - derive REPO_ROOT, allocate WS port + work dir,
@@ -121,15 +123,31 @@ st_find_hex() {
 
 st_start_container() {
     local extra=()
+
+    # Boot paused when the test needs to inject pin/ADC state before the sketch
+    # runs; this removes the startup race where an early injection is overtaken
+    # by the emulator already executing. Serial variants pause by default so the
+    # serial PTY is ready before data flows. virtualavr treats PAUSE_ON_START as
+    # truthy for ANY value, so the variable must be omitted (not "false") to run.
+    local pause=0
+    [[ "${ST_SERIAL:-0}" == "1" ]] && pause=1
+    case "${ST_PAUSE:-}" in
+        1|true|yes|on)   pause=1 ;;
+        0|false|no|off)  pause=0 ;;
+    esac
+    [[ "$pause" == "1" ]] && extra+=(-e "PAUSE_ON_START=true")
+
     if [[ "${ST_SERIAL:-0}" == "1" ]]; then
         extra+=(--volume /dev:/dev \
                 -e "VIRTUALDEVICE=${SERIAL_DEVICE:?SERIAL_DEVICE not set}" \
                 -e "BAUDRATE=${BAUD:?BAUD not set}" \
-                -e "DEVICEUSER=$(id -u)" \
-                -e "PAUSE_ON_START=${ST_PAUSE:-true}")
+                -e "DEVICEUSER=$(id -u)")
     fi
 
     st_step "Starting virtualavr container ($IMAGE)..."
+    if [[ "$pause" == "1" ]]; then
+        echo "      Boot paused (will unpause once state is injected)"
+    fi
     if [[ "${ST_SERIAL:-0}" == "1" ]]; then
         echo "      Serial device: $SERIAL_DEVICE @ ${BAUD} baud"
     fi

@@ -6,10 +6,13 @@ class OopBlink {
         Led led2 = new Led(12);
 
         while (true) {
-            led1.on();
+            // Turn led2 off before turning led1 on so the two LEDs are never
+            // HIGH at the same time (systemtest-oop-blink asserts this).
             led2.off();
+            led1.on();
             Delay.delay(500);
 
+            // Likewise: clear led1 before driving led2.
             led1.off();
             led2.on();
             Delay.delay(500);

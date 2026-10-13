@@ -26,9 +26,9 @@ BB1:
 
 define void @NoiseLevelIndicator_main() {
 BB0:
+  %v1 = alloca %NoiseLevelIndicator_t
   br label %BB1
 BB1:
-  %v1 = alloca %NoiseLevelIndicator_t
   call void @NoiseLevelIndicator__init_(ptr %v1)
   call void @NoiseLevelIndicator_main(ptr %v1)
   ret void
