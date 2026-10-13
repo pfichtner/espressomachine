@@ -105,6 +105,65 @@ run_hex_test() {
     fi
 }
 
+# Build a program and echo its flash size (avr-size "text" column =
+# .vectors + .text + .data). Requires the AVR toolchain, which the build
+# itself already depends on.
+build_and_size() {
+    local name="$1" classpath="$2" entry="$3"
+    local build_dir="$ACTUAL_DIR/${name}-build"
+    $TJ build --cp "$classpath" "$entry" --target atmega328p --output "$build_dir" \
+        > /dev/null 2>&1 || return 1
+    [[ -f "$build_dir/${entry}.elf" ]] || return 1
+    avr-size "$build_dir/${entry}.elf" | awk 'NR==2 { print $1 }'
+}
+
+# Run a size test: build the program and assert its flash size.
+run_size_test() {
+    local name="$1" classpath="$2" entry="$3" expected="$4"
+    [[ -n "$FILTER" && "$name" != "$FILTER" ]] && { SKIP=$((SKIP + 1)); return 0; }
+    echo "[$name]"
+    local actual
+    actual=$(build_and_size "$name" "$classpath" "$entry") || {
+        echo "  ERROR: build failed"
+        FAIL=$((FAIL + 1))
+        return 1
+    }
+    if [[ "$actual" == "$expected" ]]; then
+        echo "  PASS (text = $actual bytes)"
+        PASS=$((PASS + 1))
+    else
+        echo "  FAIL (expected text = $expected, got $actual)"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+# Run a parity size test: build two programs and assert they produce the
+# same flash size. Used to verify zero-overhead abstractions (an OOP program
+# must compile to exactly the same size as its imperative equivalent).
+run_size_parity_test() {
+    local name="$1" cp_a="$2" entry_a="$3" cp_b="$4" entry_b="$5"
+    [[ -n "$FILTER" && "$name" != "$FILTER" ]] && { SKIP=$((SKIP + 1)); return 0; }
+    echo "[$name]"
+    local size_a size_b
+    size_a=$(build_and_size "${name}-a" "$cp_a" "$entry_a") || {
+        echo "  ERROR: build of $entry_a failed"
+        FAIL=$((FAIL + 1))
+        return 1
+    }
+    size_b=$(build_and_size "${name}-b" "$cp_b" "$entry_b") || {
+        echo "  ERROR: build of $entry_b failed"
+        FAIL=$((FAIL + 1))
+        return 1
+    }
+    if [[ "$size_a" == "$size_b" ]]; then
+        echo "  PASS ($entry_a == $entry_b == $size_a bytes)"
+        PASS=$((PASS + 1))
+    else
+        echo "  FAIL ($entry_a = $size_a, $entry_b = $size_b — abstraction added $((size_b - size_a)) bytes)"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 # Run a Maven test: compile + run JUnit tests for one module inside the reactor.
 run_mvn_test() {
     local name="$1" module="$2"
@@ -181,6 +240,12 @@ run_hex_test "blink-hex" \
     "Blink" \
     "$APPROVED_DIR/blink.hex"
 
+# Size: Blink must stay at the documented 272-byte flash image.
+run_size_test "blink-size" \
+    "examples/blink/target/classes:$API_CLASSES" \
+    "Blink" \
+    "272"
+
 # Phase 7: OOP Blink — Led class with pin field, on()/off() instance methods
 run_ll_test "oop-blink" \
     "examples/oop-blink/target/classes:$API_CLASSES" \
@@ -190,6 +255,14 @@ run_hex_test "oop-blink-hex" \
     "examples/oop-blink/target/classes:$API_CLASSES" \
     "OopBlink" \
     "$APPROVED_DIR/oop-blink.hex"
+
+# Size parity: a single Led instance (OopBlinkSingle) must compile to the
+# same flash image as the equivalent imperative Blink — zero overhead.
+run_size_parity_test "oop-overhead" \
+    "examples/blink/target/classes:$API_CLASSES" \
+    "Blink" \
+    "examples/oop-blink/target/classes:$API_CLASSES" \
+    "OopBlinkSingle"
 
 # Mockable Gpio wrapper: AVR path devirtualises gpio.x() to GPIO intrinsics;
 # JVM path allows mocking with Mockito + Awaitility for unit testing.

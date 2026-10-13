@@ -33,7 +33,7 @@ class Blink {
 espressomachine build --cp runtime/api/target/classes Blink.class --target atmega328p
 ```
 
-→ `build/Blink.hex` — **272 bytes** of AVR machine code, ready to flash.
+→ `build/Blink.hex` — **272 bytes** of AVR machine code (the `avr-size` *text* column, i.e. `.vectors` + `.text`; the literal `.text` section is 152 bytes. The Intel-HEX file is ~812 bytes on disk because HEX is ASCII), ready to flash.
 
 ### Entry points
 
@@ -102,7 +102,7 @@ Java / Kotlin / Scala / Clojure source
 
 ## Features
 
-- **Zero JVM overhead** — object abstractions are absorbed at compile time. The `Led` class from the OOP Blink example adds zero bytes over the equivalent imperative code.
+- **Zero JVM overhead** — object abstractions are absorbed at compile time. The `Led` class adds zero bytes: a single `Led` instance (`new Led(13)`) compiles to the same 272 bytes as the equivalent imperative `Blink`. (Additional `Led` instances add code for their pins, not abstraction overhead.)
 - **Escape analysis** — non-escaping objects stack-allocated (`alloca`); static objects become LLVM globals; heap-escaping allocations produce a compile-time error.
 - **Compile-time GPIO inlining** — `GPIO.digitalWrite(13, HIGH)` with a constant pin number compiles to a single `sbi`/`cbi` instruction; `GPIO.digitalRead(2)` with a constant pin inlines to a `PIND` load and bit-test.
 - **Dead-code elimination** — each runtime function lands in its own ELF section (`-function-sections`); `avr-ld --gc-sections` drops any section not reachable from the interrupt vector table. A Blink sketch that inlines all its GPIO calls carries no gpio.ll code at all.
@@ -358,7 +358,7 @@ Configuration via environment variables:
 | 4 | Embedded intrinsics — GPIO / Delay API, PORTB/DDRB MMIO inlining |
 | 5 | ATmega328P target — startup, linker, `avr-ld`, produces flashable HEX |
 | 6 | First Blink — `Blink.hex` 332 bytes, `sbi`/`cbi` verified by disassembly |
-| 7 | OOP Blink — `Led` class with constructor, fields, instance methods; single-LED version 272 bytes (identical to imperative Blink, proving zero-overhead abstraction); current example alternates two LEDs: 668 bytes |
+| 7 | OOP Blink — `Led` class with constructor, fields, instance methods; single-LED version 272 bytes (identical to imperative Blink, proving zero-overhead abstraction); current example alternates two LEDs: 710 bytes |
 | CLI | `espressomachine build / inspect / emit-llvm / flash` |
 | 8 | Serial, ADC, PWM, Random, java.lang.Math, java.util.Random |
 | 9 | `GPIO.digitalRead` + `INPUT_PULLUP`, `Functions.map/constrain`, `Time.millis()` |
