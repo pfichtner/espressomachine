@@ -30,7 +30,7 @@ class Blink {
 ```
 
 ```
-espressomachine build Blink.class --target atmega328p
+espressomachine build --cp runtime/api/target/classes Blink.class --target atmega328p
 ```
 
 → `build/Blink.hex` — **272 bytes** of AVR machine code, ready to flash.
@@ -134,14 +134,20 @@ sudo apt-get install openjdk-17-jdk maven llvm avr-libc binutils-avr avrdude
 # Build the compiler
 cd teavm-backend/llvm && mvn package -q && cd ../..
 
+# Compile the runtime API stubs and the example programs
+mvn compile -q -f examples/pom.xml
+
 # Add bin/ to PATH
 export PATH="$PWD/bin:$PATH"
 
+# Classpath for the Blink example: its own classes + the runtime API stubs
+CP="examples/blink/target/classes:runtime/api/target/classes"
+
 # Compile and inspect IR
-espressomachine emit-llvm examples/blink/classes Blink -o Blink.ll
+espressomachine emit-llvm --cp "$CP" Blink -o Blink.ll
 
 # Full pipeline → HEX
-espressomachine build examples/blink/classes Blink --target atmega328p
+espressomachine build --cp "$CP" Blink --target atmega328p
 avr-size build/Blink.elf
 
 # Flash (replace /dev/ttyUSB0 with your port)
@@ -181,7 +187,7 @@ espressomachine flash     --port <dev>                                    <Foo.h
 
 Input forms:
 - `Blink.class` — classpath = parent directory, entry class = `Blink`
-- `examples/blink/classes Blink` — explicit classpath directory and class name
+- `examples/blink/target/classes:runtime/api/target/classes Blink` — explicit classpath directory and class name
 - `--cp dir1:dir2 ClassName` — colon-separated extra classpath entries
 
 Default output directory: `build/` relative to the working directory.
