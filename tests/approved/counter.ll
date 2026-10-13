@@ -39,9 +39,9 @@ BB1:
 
 define void @Counter_main() {
 BB0:
+  %v1 = alloca %Counter_t
   br label %BB1
 BB1:
-  %v1 = alloca %Counter_t
   call void @Counter_increment(ptr %v1)
   call void @Counter_increment(ptr %v1)
   ret void

@@ -389,6 +389,21 @@ if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-gpio" ]]; then
     fi
 fi
 
+# Run the OopBlink program on virtualavr: two Led objects (class-method call
+# transformation) must blink pins 13 and 12 in turn, never both HIGH at once.
+if [[ -n "${RUN_INTEGRATION_TESTS:-}" || "$FILTER" == "systemtest-oop-blink" ]]; then
+    if [[ "$FILTER" == "systemtest-oop-blink" || -z "$FILTER" ]]; then
+        echo "[systemtest-oop-blink]"
+        if bash tests/systemtest-oop-blink.sh; then
+            echo "  PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "  FAIL"
+            FAIL=$((FAIL + 1))
+        fi
+    fi
+fi
+
 # ------------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------------

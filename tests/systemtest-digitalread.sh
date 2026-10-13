@@ -44,6 +44,8 @@ BTN_PIN="${BTN_PIN:-2}"
 WAIT_TIMEOUT="${DR_TIMEOUT:-5}"
 TOGGLE_MIN="${DR_TOGGLES:-4}"      # ≥4 blink edges in 5 s; blink = 400 ms/cycle → ~12 edges
 
+ST_PAUSE=1     # boot paused so pin state is injected before the sketch executes
+
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/systemtest-lib.sh"
 st_init
 
@@ -74,7 +76,7 @@ st_wait_ws
 #   2. Normalize BTN to LOW  → wait for "low" ack  (handles INPUT_PULLUP case
 #      where the pull-up may have already driven the pin HIGH before we subscribed)
 #   3. Drive BTN HIGH        → wait for "high" ack
-#   4. Count LED blink edges for WAIT_TIMEOUT seconds
+#   4. Unpause the MCU, then count LED blink edges for WAIT_TIMEOUT seconds
 #
 # The concurrent pipeline structure: the writer process polls ACK_FILE which
 # the reader side-channel fills from received replyId messages; both run as
@@ -94,6 +96,7 @@ toggles=$(
         ws_pin_inject "$BTN_PIN" true "$high_id"
         st_wait_ack "$high_id"
 
+        ws_unpause_msg
         sleep "$WAIT_TIMEOUT"
     ) | websocat "$WS_URL" 2>/dev/null \
       | while IFS= read -r line; do

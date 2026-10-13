@@ -20,10 +20,10 @@ BB1:
 
 define void @MemoryTest_localUse() {
 BB0:
+  %v1 = alloca %Counter_t
   ; init_class MemoryTest
   br label %BB1
 BB1:
-  %v1 = alloca %Counter_t
   call void @Counter_increment(ptr %v1)
   ret void
 }

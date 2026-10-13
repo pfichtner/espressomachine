@@ -40,6 +40,8 @@ BTN_PIN="${BTN_PIN:-2}"
 WAIT_TIMEOUT="${GPIO_TIMEOUT:-5}"
 TOGGLE_MIN="${GPIO_TOGGLES:-4}"    # ≥4 blink edges in 5 s; blink = 400 ms/cycle → ~12 edges
 
+ST_PAUSE=1     # boot paused so pin state is injected before the sketch executes
+
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/systemtest-lib.sh"
 st_init
 
@@ -78,6 +80,7 @@ toggles=$(
         ws_pin_inject "$BTN_PIN" true "$high_id"
         st_wait_ack "$high_id"
 
+        ws_unpause_msg
         sleep "$WAIT_TIMEOUT"
     ) | websocat "$WS_URL" 2>/dev/null \
       | while IFS= read -r line; do

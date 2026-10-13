@@ -8,23 +8,27 @@
 ;   DDRB  = 0x24   PORTB = 0x25
 ;   DDRC  = 0x27   PORTC = 0x28
 ;   DDRD  = 0x2A   PORTD = 0x2B
+;
+; The lookup tables live in flash (addrspace(1)): the data address space
+; (addrspace 0) only covers SRAM and cannot see program-space constants, so
+; each table load must lower to `lpm`.
 
 ; Arduino digital pin → (DDR address, PORT address, PIN address, bit mask)
 ; Table encoded per row, 14 pins (D0–D13).
 
-@__pin_ddr  = private constant [14 x i8] [
+@__pin_ddr  = private addrspace(1) constant [14 x i8] [
     i8 42, i8 42, i8 42, i8 42, i8 42, i8 42, i8 42, i8 42,  ; D0–D7  DDRD=0x2A
     i8 36, i8 36, i8 36, i8 36, i8 36, i8 36                  ; D8–D13 DDRB=0x24
 ]
-@__pin_port = private constant [14 x i8] [
+@__pin_port = private addrspace(1) constant [14 x i8] [
     i8 43, i8 43, i8 43, i8 43, i8 43, i8 43, i8 43, i8 43,  ; D0–D7  PORTD=0x2B
     i8 37, i8 37, i8 37, i8 37, i8 37, i8 37                  ; D8–D13 PORTB=0x25
 ]
-@__pin_pin  = private constant [14 x i8] [
+@__pin_pin  = private addrspace(1) constant [14 x i8] [
     i8 41, i8 41, i8 41, i8 41, i8 41, i8 41, i8 41, i8 41,  ; D0–D7  PIND=0x29
     i8 35, i8 35, i8 35, i8 35, i8 35, i8 35                  ; D8–D13 PINB=0x23
 ]
-@__pin_mask = private constant [14 x i8] [
+@__pin_mask = private addrspace(1) constant [14 x i8] [
     i8  1, i8  2, i8  4, i8  8, i8 16, i8 32, i8 64, i8 -128, ; D0–D7
     i8  1, i8  2, i8  4, i8  8, i8 16, i8  32                  ; D8–D13
 ]
@@ -32,12 +36,12 @@
 ; mode: 0=INPUT, 1=OUTPUT, 2=INPUT_PULLUP
 define void @__espressomachine_gpio_pinmode(i32 %pin, i32 %mode) {
 entry:
-  %ddr_idx  = getelementptr [14 x i8], ptr @__pin_ddr,  i32 0, i32 %pin
-  %ddr_byte = load i8, ptr %ddr_idx
+  %ddr_idx  = getelementptr [14 x i8], ptr addrspace(1) @__pin_ddr, i32 0, i32 %pin
+  %ddr_byte = load i8, ptr addrspace(1) %ddr_idx
   %ddr_a16  = zext i8 %ddr_byte to i16
   %ddr_addr = inttoptr i16 %ddr_a16 to ptr
-  %mask_idx = getelementptr [14 x i8], ptr @__pin_mask, i32 0, i32 %pin
-  %mask     = load i8, ptr %mask_idx
+  %mask_idx = getelementptr [14 x i8], ptr addrspace(1) @__pin_mask, i32 0, i32 %pin
+  %mask     = load i8, ptr addrspace(1) %mask_idx
   %inv      = xor i8 %mask, -1
   %is_out   = icmp eq i32 %mode, 1
   br i1 %is_out, label %set_out, label %set_in
@@ -54,8 +58,8 @@ set_in:
   %is_pullup = icmp eq i32 %mode, 2
   br i1 %is_pullup, label %set_pullup, label %done
 set_pullup:
-  %port_idx  = getelementptr [14 x i8], ptr @__pin_port, i32 0, i32 %pin
-  %port_byte = load i8, ptr %port_idx
+  %port_idx  = getelementptr [14 x i8], ptr addrspace(1) @__pin_port, i32 0, i32 %pin
+  %port_byte = load i8, ptr addrspace(1) %port_idx
   %port_a16  = zext i8 %port_byte to i16
   %port_addr = inttoptr i16 %port_a16 to ptr
   %cur_port  = load volatile i8, ptr %port_addr
@@ -68,12 +72,12 @@ done:
 
 define i32 @__espressomachine_gpio_digitalread(i32 %pin) {
 entry:
-  %pin_idx  = getelementptr [14 x i8], ptr @__pin_pin,  i32 0, i32 %pin
-  %pin_byte = load i8, ptr %pin_idx
+  %pin_idx  = getelementptr [14 x i8], ptr addrspace(1) @__pin_pin,  i32 0, i32 %pin
+  %pin_byte = load i8, ptr addrspace(1) %pin_idx
   %pin_a16  = zext i8 %pin_byte to i16
   %pin_addr = inttoptr i16 %pin_a16 to ptr
-  %mask_idx = getelementptr [14 x i8], ptr @__pin_mask, i32 0, i32 %pin
-  %mask     = load i8, ptr %mask_idx
+  %mask_idx = getelementptr [14 x i8], ptr addrspace(1) @__pin_mask, i32 0, i32 %pin
+  %mask     = load i8, ptr addrspace(1) %mask_idx
   %cur      = load volatile i8, ptr %pin_addr
   %masked   = and i8 %cur, %mask
   %ne       = icmp ne i8 %masked, 0
@@ -125,10 +129,10 @@ done:
 ; TCCRxA COM bits enable the compare-output pin in fast-PWM mode.
 ; The prescaler and WGM bits in TCCRxB are assumed to be set by user startup code.
 
-@__pwm_pin  = private constant [6 x i8]  [i8  3, i8  5, i8  6, i8  9, i8 10, i8 11]
-@__pwm_tccr = private constant [6 x i16] [i16 176, i16 68, i16 68, i16 128, i16 128, i16 176]
-@__pwm_com  = private constant [6 x i8]  [i8 32, i8 32, i8 -128, i8 -128, i8 32, i8 -128]
-@__pwm_ocr  = private constant [6 x i16] [i16 180, i16 72, i16 71, i16 136, i16 138, i16 179]
+@__pwm_pin  = private addrspace(1) constant [6 x i8]  [i8  3, i8  5, i8  6, i8  9, i8 10, i8 11]
+@__pwm_tccr = private addrspace(1) constant [6 x i16] [i16 176, i16 68, i16 68, i16 128, i16 128, i16 176]
+@__pwm_com  = private addrspace(1) constant [6 x i8]  [i8 32, i8 32, i8 -128, i8 -128, i8 32, i8 -128]
+@__pwm_ocr  = private addrspace(1) constant [6 x i16] [i16 180, i16 72, i16 71, i16 136, i16 138, i16 179]
 
 define void @__espressomachine_gpio_analogWrite(i32 %pin, i32 %value) {
 entry:
@@ -140,21 +144,21 @@ loop:
   %done   = icmp eq i32 %idx, 6
   br i1 %done, label %exit, label %check
 check:
-  %p_ptr  = getelementptr [6 x i8], ptr @__pwm_pin, i32 0, i32 %idx
-  %p      = load i8, ptr %p_ptr
+  %p_ptr  = getelementptr [6 x i8], ptr addrspace(1) @__pwm_pin, i32 0, i32 %idx
+  %p      = load i8, ptr addrspace(1) %p_ptr
   %match  = icmp eq i8 %p, %pin8
   br i1 %match, label %write, label %no_match
 write:
-  %tc_ptr = getelementptr [6 x i16], ptr @__pwm_tccr, i32 0, i32 %idx
-  %tc_a   = load i16, ptr %tc_ptr
+  %tc_ptr = getelementptr [6 x i16], ptr addrspace(1) @__pwm_tccr, i32 0, i32 %idx
+  %tc_a   = load i16, ptr addrspace(1) %tc_ptr
   %tc_ptr2 = inttoptr i16 %tc_a to ptr
   %tccr   = load volatile i8, ptr %tc_ptr2
-  %com_p  = getelementptr [6 x i8], ptr @__pwm_com, i32 0, i32 %idx
-  %com    = load i8, ptr %com_p
+  %com_p  = getelementptr [6 x i8], ptr addrspace(1) @__pwm_com, i32 0, i32 %idx
+  %com    = load i8, ptr addrspace(1) %com_p
   %new_tc = or i8 %tccr, %com
   store volatile i8 %new_tc, ptr %tc_ptr2
-  %oc_ptr = getelementptr [6 x i16], ptr @__pwm_ocr, i32 0, i32 %idx
-  %oc_a   = load i16, ptr %oc_ptr
+  %oc_ptr = getelementptr [6 x i16], ptr addrspace(1) @__pwm_ocr, i32 0, i32 %idx
+  %oc_a   = load i16, ptr addrspace(1) %oc_ptr
   %oc_ptr2 = inttoptr i16 %oc_a to ptr
   store volatile i8 %duty, ptr %oc_ptr2
   ret void
@@ -167,12 +171,12 @@ exit:
 
 define void @__espressomachine_gpio_digitalwrite(i32 %pin, i32 %value) {
 entry:
-  %port_idx = getelementptr [14 x i8], ptr @__pin_port, i32 0, i32 %pin
-  %port_byte = load i8, ptr %port_idx
+  %port_idx = getelementptr [14 x i8], ptr addrspace(1) @__pin_port, i32 0, i32 %pin
+  %port_byte = load i8, ptr addrspace(1) %port_idx
   %port_addr16 = zext i8 %port_byte to i16
   %port_addr = inttoptr i16 %port_addr16 to ptr
-  %mask_idx = getelementptr [14 x i8], ptr @__pin_mask, i32 0, i32 %pin
-  %mask = load i8, ptr %mask_idx
+  %mask_idx = getelementptr [14 x i8], ptr addrspace(1) @__pin_mask, i32 0, i32 %pin
+  %mask = load i8, ptr addrspace(1) %mask_idx
   %cur = load volatile i8, ptr %port_addr
   %is_high = icmp ne i32 %value, 0
   br i1 %is_high, label %set_high, label %set_low

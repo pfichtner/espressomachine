@@ -31,6 +31,7 @@ APPROVED_HEX="analog-blink.hex"
 CONTAINER_TAG="analog"
 STEPS=5
 
+ST_PAUSE=1     # boot paused so the ADC value is in place before the first read
 PIN="${BLINK_PIN:-13}"
 ADC_PIN="${ADC_PIN:-A0}"
 ADC_VALUE="${ADC_VALUE:-800}"          # > 512 → fast-blink path (100 ms half-period)
@@ -58,8 +59,10 @@ st_wait_ws
 # ---------------------------------------------------------------------------
 # Inject ADC value and watch pin $PIN for toggles.
 #
-# Send the ADC value first so it is in effect when the MCU executes the first
-# analogRead.  Then subscribe to pin 13 and count HIGH↔LOW transitions.
+# The container boots paused (ST_PAUSE=1), so the ADC value and the pin
+# subscription are queued and applied before the sketch executes; the unpause
+# message then starts the MCU with the injected value already in place.  This
+# avoids the startup race where an early injection is overtaken by the emulator.
 # ADC_VALUE=800 (> 512) selects the fast-blink path (100 ms half-period = 200 ms
 # full period).  6 toggles in 5 s requires ≤ 833 ms/toggle — easily met by the
 # fast path but impossible for the slow path (1000 ms/toggle).
@@ -69,6 +72,7 @@ toggles=$(
     {
         ws_pin_inject "$ADC_PIN" "$ADC_VALUE"
         ws_pin_subscribe "$PIN"
+        ws_unpause_msg
         sleep "$WAIT_TIMEOUT"
     } | websocat "$WS_URL" 2>/dev/null \
       | st_count_pin_toggles "$PIN"

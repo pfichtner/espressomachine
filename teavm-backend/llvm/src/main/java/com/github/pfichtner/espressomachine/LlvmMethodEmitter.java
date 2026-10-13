@@ -3,6 +3,7 @@ package com.github.pfichtner.espressomachine;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -118,6 +119,16 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     // Escape analysis result — set once per method in emit().
     private EscapeAnalyzer escape;
 
+    // Stack allocations hoisted into the entry block, keyed by receiver variable
+    // index and mapped to the LLVM struct type.  Emitting an alloca anywhere
+    // other than the entry block makes LLVM treat it as a *dynamic* alloca: llc
+    // lowers it to an inline "SP -= size; ptr = SP" sequence.  On AVR the stack
+    // grows downwards and a call stores its return address at [SP] and [SP-1],
+    // so an object placed at [SP] is immediately clobbered by the next call.
+    // Hoisting the alloca into the entry block produces a static frame slot
+    // (prologue "sbiw Y, size"; locals at Y+1..Y+n) that is call-safe.
+    private final Map<Integer, String> stackAllocas = new LinkedHashMap<>();
+
     // True when emitting an enum class's <clinit> — controls string/init/values handling.
     private final boolean inEnumClinit;
     // The enum class name, when inEnumClinit is true.
@@ -156,6 +167,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     void emit() {
         escape = EscapeAnalyzer.analyze(program, method);
         collectVarargs();
+        collectStackAllocas();
         emitFunctionHeader();
         IntStream.range(0, program.basicBlockCount()).forEach(i -> {
             BasicBlock bb = program.basicBlockAt(i);
@@ -236,6 +248,25 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         }
     }
 
+    /**
+     * Collect stack-allocated objects (non-escaping {@code new}) so their
+     * {@code alloca} can be emitted at the top of the entry block.  See
+     * {@link #stackAllocas} for why this is required on AVR.
+     */
+    private void collectStackAllocas() {
+        forEachInstruction(insn -> {
+            if (!(insn instanceof ConstructInstruction c)) return;
+            if (LlvmModuleEmitter.isJavaLangObject(c.getType())) return;
+            EscapeAnalyzer.Fate f = (escape != null)
+                    ? escape.fateOf(c.getReceiver().getIndex())
+                    : EscapeAnalyzer.Fate.STACK;
+            if (f == EscapeAnalyzer.Fate.STACK) {
+                stackAllocas.put(c.getReceiver().getIndex(),
+                        "%" + LlvmModuleEmitter.llvmStructName(c.getType()));
+            }
+        });
+    }
+
     private void copyIntConstant(int receiver, int source) {
         Integer c = intConstants.get(source);
         if (c != null) intConstants.put(receiver, c);
@@ -302,6 +333,16 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     private void emitBlock(BasicBlock bb, int index) {
         out.append(bbLabel(index)).append(":\n");
+
+        // Hoisted stack allocations: emit at the top of the entry block so llc
+        // lowers them as part of the static frame (call-safe) rather than as an
+        // inline dynamic SP adjustment (which the next call would clobber).
+        if (index == 0) {
+            for (Map.Entry<Integer, String> e : stackAllocas.entrySet()) {
+                out.append("  ").append(v(e.getKey()))
+                   .append(" = alloca ").append(e.getValue()).append("\n");
+            }
+        }
 
         // PHI nodes at block entry
         for (Phi phi : bb.getPhis()) {
@@ -663,9 +704,14 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         String structType = "%" + LlvmModuleEmitter.llvmStructName(insn.getType());
         switch (f) {
             case STACK -> {
-                // Non-escaping: safe to stack-allocate.
-                out.append("  ").append(v(insn.getReceiver()))
-                   .append(" = alloca ").append(structType).append("\n");
+                // Non-escaping: safe to stack-allocate.  The alloca itself was
+                // emitted at the top of the entry block by emitBlock(); here we
+                // only need to ensure it exists (fallback for the rare case the
+                // hoisting pass missed it).
+                if (!stackAllocas.containsKey(idx)) {
+                    out.append("  ").append(v(insn.getReceiver()))
+                       .append(" = alloca ").append(structType).append("\n");
+                }
             }
             case STATIC -> {
                 // Stored to a static field in <clinit>: the module emitter will
