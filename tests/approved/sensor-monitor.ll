@@ -55,15 +55,15 @@ BB2:
   %v18 = add i32 0, 13
   call void @__espressomachine_gpio_analogWrite(i32 13, i32 %v17)
   %v19 = getelementptr i8, ptr addrspace(1) @espressomachine_string_1, i32 0
-  %v25 = fptosi float %v12 to i32
+  %v24 = fptosi float %v12 to i32
   call void @__espressomachine_serial_print_str(ptr addrspace(1) @espressomachine_string_2)
   call void @__espressomachine_serial_print_int(i32 %v7)
   call void @__espressomachine_serial_print_str(ptr addrspace(1) @espressomachine_string_3)
-  call void @__espressomachine_serial_print_int(i32 %v25)
+  call void @__espressomachine_serial_print_int(i32 %v24)
   call void @__espressomachine_serial_print_str(ptr addrspace(1) @espressomachine_string_4)
   call void @__espressomachine_serial_print_int(i32 %v17)
   call void @__espressomachine_serial_print_str(ptr addrspace(1) @espressomachine_string_5)
-  %v29 = add i32 0, 1000
+  %v26 = add i32 0, 1000
   call void @__espressomachine_delay_ms(i32 1000)
   br label %BB2
 }

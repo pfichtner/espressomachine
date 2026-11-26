@@ -89,7 +89,6 @@ BB3:
   %_t6 = load volatile i8, ptr inttoptr (i16 37 to ptr)
   %_t7 = or i8 %_t6, 32
   store volatile i8 %_t7, ptr inttoptr (i16 37 to ptr)
-  ; init_class java.util.concurrent.TimeUnit
   %v9 = getelementptr i8, ptr @java_util_concurrent_TimeUnit_MILLISECONDS, i32 0
   %v10 = add i64 0, 200
   call void @__espressomachine_delay_ms(i32 200)
