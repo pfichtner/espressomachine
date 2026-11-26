@@ -102,6 +102,15 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     // Integer-constant variables used only as the index/length operands of a
     // spliced varargs array; their materialisation is suppressed as well.
     private final Set<Integer> varargScratch = new HashSet<>();
+    // Receiver indices of NullConstantInstructions that are inlined boxing-stub
+    // results (TeaVM 0.17+ inlines the valueOf() stub body, which is `return
+    // null`, and reuses the primitive's variable for the null). The null is dead
+    // — the element value is the other definition of that variable — so emitting
+    // it would redefine the same LLVM local. Suppress it.
+    // shortcut: assumes the inlined null shares the variable with the primitive
+    // (which 0.17.0 does); if TeaVM ever splits them, resolveBoxing must map the
+    // null back to the primitive instead.
+    private final Set<Integer> boxedNulls = new HashSet<>();
 
     // Counter for anonymous LLVM values (%tmp0, %tmp1, …) used inside branches.
     private int tmpCounter = 0;
@@ -168,6 +177,7 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         escape = EscapeAnalyzer.analyze(program, method);
         collectVarargs();
         collectStackAllocas();
+        collectBoxedNulls();
         emitFunctionHeader();
         IntStream.range(0, program.basicBlockCount()).forEach(i -> {
             BasicBlock bb = program.basicBlockAt(i);
@@ -265,6 +275,44 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
                         "%" + LlvmModuleEmitter.llvmStructName(c.getType()));
             }
         });
+    }
+
+    /**
+     * TeaVM 0.17+ inlines the boxing stubs ({@code Integer.valueOf(int)} etc.,
+     * whose body is just {@code return null}) and reuses the primitive's
+     * variable for the resulting null.  That variable is then defined by both a
+     * primitive instruction (e.g. a {@code cast_num}) and a
+     * {@link NullConstantInstruction}, so emitting both would redefine the same
+     * LLVM local ("multiple definition of local value").  The null is a dead
+     * stub artifact — the value the caller wants is the primitive — so
+     * suppress the null and let the primitive stand.
+     */
+    private void collectBoxedNulls() {
+        Set<Integer> nullDef = new HashSet<>();
+        Set<Integer> primDef = new HashSet<>();
+        forEachInstruction(insn -> {
+            if (insn instanceof NullConstantInstruction n) {
+                nullDef.add(n.getReceiver().getIndex());
+            } else {
+                Integer r = primitiveReceiverOf(insn);
+                if (r != null) primDef.add(r);
+            }
+        });
+        nullDef.retainAll(primDef);
+        boxedNulls.addAll(nullDef);
+    }
+
+    // Receiver variable of a primitive-value-producing instruction, or null.
+    private static Integer primitiveReceiverOf(org.teavm.model.Instruction insn) {
+        if (insn instanceof CastNumberInstruction c) return c.getReceiver().getIndex();
+        if (insn instanceof CastIntegerInstruction c) return c.getReceiver().getIndex();
+        if (insn instanceof BinaryInstruction b) return b.getReceiver().getIndex();
+        if (insn instanceof NegateInstruction n) return n.getReceiver().getIndex();
+        if (insn instanceof IntegerConstantInstruction c) return c.getReceiver().getIndex();
+        if (insn instanceof LongConstantInstruction c) return c.getReceiver().getIndex();
+        if (insn instanceof FloatConstantInstruction c) return c.getReceiver().getIndex();
+        if (insn instanceof DoubleConstantInstruction c) return c.getReceiver().getIndex();
+        return null;
     }
 
     private void copyIntConstant(int receiver, int source) {
@@ -396,6 +444,12 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     @Override
     public void visit(NullConstantInstruction insn) {
+        // Inlined boxing stub (see collectBoxedNulls): the primitive already
+        // defines this variable, so the null is dead — emitting it would
+        // redefine the same LLVM local.
+        if (boxedNulls.contains(insn.getReceiver().getIndex())) {
+            return;
+        }
         out.append("  ").append(v(insn.getReceiver())).append(" = inttoptr i32 0 to ptr\n");
     }
 
