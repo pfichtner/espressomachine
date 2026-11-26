@@ -104,9 +104,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
     private final Set<Integer> varargScratch = new HashSet<>();
     // Receiver indices of NullConstantInstructions that are inlined boxing-stub
     // results (TeaVM 0.17+ inlines the valueOf() stub body, which is `return
-    // null`, and reuses the primitive's variable for the null). The null is dead
-    // — the element value is the other definition of that variable — so emitting
-    // it would redefine the same LLVM local. Suppress it.
+    // null`, and reuses the primitive's variable for the null). Such a null is
+    // dead — the primitive that shares the variable stands in for it — only when
+    // the boxed value is consumed by varargs splicing; a boxed value used as a
+    // standalone object keeps its null (see collectBoxedNulls).
     // shortcut: assumes the inlined null shares the variable with the primitive
     // (which 0.17.0 does); if TeaVM ever splits them, resolveBoxing must map the
     // null back to the primitive instead.
@@ -283,9 +284,10 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
      * variable for the resulting null.  That variable is then defined by both a
      * primitive instruction (e.g. a {@code cast_num}) and a
      * {@link NullConstantInstruction}, so emitting both would redefine the same
-     * LLVM local ("multiple definition of local value").  The null is a dead
-     * stub artifact — the value the caller wants is the primitive — so
-     * suppress the null and let the primitive stand.
+     * LLVM local ("multiple definition of local value").  Suppress the null — but
+     * only when its boxed value is consumed by varargs splicing, where the
+     * primitive stands in for it.  A boxed value used as a standalone object is
+     * not spliced, so its null is the real value and must be kept.
      */
     private void collectBoxedNulls() {
         Set<Integer> nullDef = new HashSet<>();
@@ -298,7 +300,17 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
                 if (r != null) primDef.add(r);
             }
         });
+        // A boxed null is dead only when its boxed value is consumed by varargs
+        // splicing: its variable is then the value of a spliced element, which the
+        // primitive it shares the variable with stands in for.  A boxed value used
+        // as a standalone object is NOT spliced, so its null is the real value —
+        // suppressing it would leave a primitive where an object pointer belongs.
+        // Gate suppression on the varargs element variables.
+        Set<Integer> varargs = new HashSet<>();
+        varargElements.values().forEach(list ->
+            list.forEach(v -> varargs.add(canon(v.getIndex()))));
         nullDef.retainAll(primDef);
+        nullDef.removeIf(idx -> !varargs.contains(canon(idx)));
         boxedNulls.addAll(nullDef);
     }
 
@@ -444,9 +456,9 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
 
     @Override
     public void visit(NullConstantInstruction insn) {
-        // Inlined boxing stub (see collectBoxedNulls): the primitive already
-        // defines this variable, so the null is dead — emitting it would
-        // redefine the same LLVM local.
+        // Inlined boxing stub spliced into varargs (see collectBoxedNulls): the
+        // primitive that shares this variable stands in for the null, so the null
+        // is dead and emitting it would redefine the same LLVM local.
         if (boxedNulls.contains(insn.getReceiver().getIndex())) {
             return;
         }
