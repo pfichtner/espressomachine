@@ -290,28 +290,42 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
      * not spliced, so its null is the real value and must be kept.
      */
     private void collectBoxedNulls() {
-        Set<Integer> nullDef = new HashSet<>();
-        Set<Integer> primDef = new HashSet<>();
-        forEachInstruction(insn -> {
-            if (insn instanceof NullConstantInstruction n) {
-                nullDef.add(n.getReceiver().getIndex());
-            } else {
-                Integer r = primitiveReceiverOf(insn);
-                if (r != null) primDef.add(r);
-            }
-        });
-        // A boxed null is dead only when its boxed value is consumed by varargs
-        // splicing: its variable is then the value of a spliced element, which the
-        // primitive it shares the variable with stands in for.  A boxed value used
-        // as a standalone object is NOT spliced, so its null is the real value —
-        // suppressing it would leave a primitive where an object pointer belongs.
-        // Gate suppression on the varargs element variables.
+        // Gate suppression on varargs splicing: only a boxed value spliced into a
+        // varargs array is dead here (the primitive it shares a slot with stands in for it).
         Set<Integer> varargs = new HashSet<>();
         varargElements.values().forEach(list ->
             list.forEach(v -> varargs.add(canon(v.getIndex()))));
-        nullDef.retainAll(primDef);
-        nullDef.removeIf(idx -> !varargs.contains(canon(idx)));
-        boxedNulls.addAll(nullDef);
+        if (varargs.isEmpty()) return;
+    
+        // Match the primitive locally, per block: the inlined valueOf stub reuses
+        // the primitive's variable slot within the SAME block, so the boxed null and
+        // its primitive co-occur there.  An ordinary object null that merely reuses
+        // an index some OTHER block's primitive owns is a real value, not a boxed
+        // stub, and must survive — a global index intersection would suppress it.
+        for (int bi = 0; bi < program.basicBlockCount(); bi++) {
+            BasicBlock bb = program.basicBlockAt(bi);
+            if (bb == null) continue;
+            Set<Integer> blockPrims = new HashSet<>();
+            for (var insn : bb) {
+                Integer r = insn instanceof NullConstantInstruction ? null : primitiveReceiverOf(insn);
+                if (r != null) blockPrims.add(r);
+            }
+            for (var insn : bb) {
+                if (!(insn instanceof NullConstantInstruction n)) continue;
+                int idx = n.getReceiver().getIndex();
+                if (isBoxedNull(blockPrims, idx, canon(idx), varargs))
+                    boxedNulls.add(idx);
+            }
+        }
+    }
+    
+    // A null is a dead boxed stub only when its OWN block defines a primitive at the
+    // same raw index AND that index is a spliced varargs element.  Per-block matching
+    // is what keeps an ordinary object null whose index merely collides with a primitive
+    // in another block; a global intersection (the old logic) would wrongly suppress it.
+    static boolean isBoxedNull(Set<Integer> blockPrims, int rawIdx, int canonIdx,
+                               Set<Integer> varargs) {
+        return blockPrims.contains(rawIdx) && varargs.contains(canonIdx);
     }
 
     // Receiver variable of a primitive-value-producing instruction, or null.
