@@ -13,6 +13,13 @@ import com.github.pfichtner.espressomachine.api.Delay;
  */
 public class SensorMonitor {
 
+    // Primitives sourced from a method call, a field load and an array load
+    // are spliced into printf below; each must survive the boxing-null
+    // suppression that collectBoxedNulls performs for varargs elements.
+    private static int lastSample;
+    private static final int[] levels = { 0, 128, 255 };
+    private static int scaled(int value) { return value + value; }
+
     public static void main(String[] args) {
         // Initialize serial communication for logging
         Serial.begin(9600);
@@ -40,6 +47,11 @@ public class SensorMonitor {
             // Log to serial monitor - printf expands at compile time, no heap
             Serial.printf("Sensor:%d,V:%d,PWM:%d\r\n",
                     sensorValue, (int) voltage, pwmValue);
+
+            // Primitives from a method call, a field load and an array load
+            // also flow through printf's varargs splice.
+            Serial.printf("c=%d,f=%d,a=%d\r\n",
+                    scaled(sensorValue), lastSample, levels[sensorValue % 3]);
 
             // Delay between samples (1 second)
             Delay.delay(1000);
