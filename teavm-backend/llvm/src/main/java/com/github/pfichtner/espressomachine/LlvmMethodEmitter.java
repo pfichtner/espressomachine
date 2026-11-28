@@ -290,54 +290,59 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
      * not spliced, so its null is the real value and must be kept.
      */
     private void collectBoxedNulls() {
-        // Gate suppression on varargs splicing: only a boxed value spliced into a
-        // varargs array is dead here (the primitive it shares a slot with stands in for it).
+        // TeaVM 0.17 inlines Integer.valueOf(int) etc. (body "return null") and reuses
+        // the primitive's variable for the resulting null. The null is dead only because
+        // the primitive it shares a slot with stands in for it when the value is spliced
+        // into a varargs call. The authoritative signal that a null is such an element is
+        // that its variable is in the spliced varargs set, not a primitive-instruction
+        // list (0.17 inlines the boxing stub, leaving boxedPrimitives empty).
         Set<Integer> varargs = new HashSet<>();
         varargElements.values().forEach(list ->
             list.forEach(v -> varargs.add(canon(v.getIndex()))));
         if (varargs.isEmpty()) return;
-    
-        // Match the primitive locally, per block: the inlined valueOf stub reuses
-        // the primitive's variable slot within the SAME block, so the boxed null and
-        // its primitive co-occur there.  An ordinary object null that merely reuses
-        // an index some OTHER block's primitive owns is a real value, not a boxed
-        // stub, and must survive — a global index intersection would suppress it.
+
+        forEachInstruction(insn -> {
+            if (!(insn instanceof NullConstantInstruction n)) return;
+            int canonIdx = canon(n.getReceiver().getIndex());
+            // Suppress only when the boxed null is a spliced varargs element (its primitive
+            // stands in for it) and has no standalone object use: a boxed value that also
+            // escapes as a real object keeps its null.
+            if (isBoxedNull(varargs, canonIdx, hasStandaloneUse(canonIdx))) {
+                boxedNulls.add(canonIdx);
+             }
+         });
+     }
+ 
+     // A boxed varargs element is suppressed when its canonical index is in the
+     // spliced varargs set (Comment 4: an ordinary null collides only on raw index,
+     // never on the canonical varargs-element index) and has no standalone object use
+     // (Comment 5: a boxed value that also escapes as a real object keeps its null).
+    static boolean isBoxedNull(Set<Integer> varargs, int canonIdx, boolean hasStandaloneUse) {
+        return varargs.contains(canonIdx) && !hasStandaloneUse;
+     }
+
+    // shortcut: inspects only object-instance operand forms, so a boxed varargs element
+    // passed as a standalone argument (a non-splice Invoke arg) would be mis-suppressed;
+    // no current example boxes-then-escapes, so the scan intentionally stays narrow.
+    private boolean hasStandaloneUse(int canonVar) {
         for (int bi = 0; bi < program.basicBlockCount(); bi++) {
             BasicBlock bb = program.basicBlockAt(bi);
             if (bb == null) continue;
-            Set<Integer> blockPrims = new HashSet<>();
             for (var insn : bb) {
-                Integer r = insn instanceof NullConstantInstruction ? null : primitiveReceiverOf(insn);
-                if (r != null) blockPrims.add(r);
-            }
-            for (var insn : bb) {
-                if (!(insn instanceof NullConstantInstruction n)) continue;
-                int idx = n.getReceiver().getIndex();
-                if (isBoxedNull(blockPrims, idx, canon(idx), varargs))
-                    boxedNulls.add(idx);
+                Variable obj = objectOperandOf(insn);
+                if (obj != null && canon(obj.getIndex()) == canonVar) return true;
             }
         }
-    }
-    
-    // A null is a dead boxed stub only when its OWN block defines a primitive at the
-    // same raw index AND that index is a spliced varargs element.  Per-block matching
-    // is what keeps an ordinary object null whose index merely collides with a primitive
-    // in another block; a global intersection (the old logic) would wrongly suppress it.
-    static boolean isBoxedNull(Set<Integer> blockPrims, int rawIdx, int canonIdx,
-                               Set<Integer> varargs) {
-        return blockPrims.contains(rawIdx) && varargs.contains(canonIdx);
+        return false;
     }
 
-    // Receiver variable of a primitive-value-producing instruction, or null.
-    private static Integer primitiveReceiverOf(org.teavm.model.Instruction insn) {
-        if (insn instanceof CastNumberInstruction c) return c.getReceiver().getIndex();
-        if (insn instanceof CastIntegerInstruction c) return c.getReceiver().getIndex();
-        if (insn instanceof BinaryInstruction b) return b.getReceiver().getIndex();
-        if (insn instanceof NegateInstruction n) return n.getReceiver().getIndex();
-        if (insn instanceof IntegerConstantInstruction c) return c.getReceiver().getIndex();
-        if (insn instanceof LongConstantInstruction c) return c.getReceiver().getIndex();
-        if (insn instanceof FloatConstantInstruction c) return c.getReceiver().getIndex();
-        if (insn instanceof DoubleConstantInstruction c) return c.getReceiver().getIndex();
+    // The object an instruction operates on, if any. The PutElement that splices a boxed
+    // element into its varargs array is the null's only use, so it is not a standalone one.
+    private static Variable objectOperandOf(org.teavm.model.Instruction insn) {
+        if (insn instanceof GetFieldInstruction g) return g.getInstance();
+        if (insn instanceof PutFieldInstruction p) return p.getInstance();
+        if (insn instanceof InvokeInstruction i) return i.getInstance();
+        if (insn instanceof NullCheckInstruction n) return n.getValue();
         return null;
     }
 
@@ -473,7 +478,9 @@ class LlvmMethodEmitter extends AbstractInstructionVisitor {
         // Inlined boxing stub spliced into varargs (see collectBoxedNulls): the
         // primitive that shares this variable stands in for the null, so the null
         // is dead and emitting it would redefine the same LLVM local.
-        if (boxedNulls.contains(insn.getReceiver().getIndex())) {
+        // canonical varargs-element index so every alias of the qualifying null is
+        // suppressed, while an ordinary null whose raw index merely collides is not.
+        if (boxedNulls.contains(canon(insn.getReceiver().getIndex()))) {
             return;
         }
         out.append("  ").append(v(insn.getReceiver())).append(" = inttoptr i32 0 to ptr\n");
